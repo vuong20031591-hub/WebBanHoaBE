@@ -1,8 +1,13 @@
 package com.florastore.web_ban_hoa.controller;
 
-import com.florastore.web_ban_hoa.dto.ProductResponse;
+import com.florastore.web_ban_hoa.dto.PagedResponse;
+import com.florastore.web_ban_hoa.dto.ProductDTO;
 import com.florastore.web_ban_hoa.service.ProductService;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,13 +23,15 @@ public class ProductController {
         this.productService = productService;
     }
 
-    @GetMapping
-    public Page<ProductResponse> getProducts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String direction
+    @GetMapping("/search")
+    public ResponseEntity<PagedResponse<ProductDTO>> searchProducts(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Long minPrice,
+            @RequestParam(required = false) Long maxPrice,
+            @RequestParam(required = false) Long categoryId,
+            @PageableDefault(page = 0, size = 10, sort = "id", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        return productService.getProducts(page, size, sortBy, direction);
+        Page<ProductDTO> result = productService.search(name, minPrice, maxPrice, categoryId, pageable);
+        return ResponseEntity.ok(PagedResponse.from(result));
     }
 }
