@@ -1,7 +1,7 @@
 package com.florastore.web_ban_hoa.service.impl;
 
-import com.florastore.web_ban_hoa.domain.Category;
-import com.florastore.web_ban_hoa.domain.Product;
+import com.florastore.web_ban_hoa.entity.Category;
+import com.florastore.web_ban_hoa.entity.Product;
 import com.florastore.web_ban_hoa.dto.ProductDTO;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
 import com.florastore.web_ban_hoa.service.ProductService;
@@ -41,7 +41,7 @@ public class ProductServiceImpl implements ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getDescription(),
-                product.getImageUrl(),
+                product.getImage(),
                 categoryName
         );
     }

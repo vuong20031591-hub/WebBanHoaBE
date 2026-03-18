@@ -1,6 +1,6 @@
 package com.florastore.web_ban_hoa.specification;
 
-import com.florastore.web_ban_hoa.domain.Product;
+import com.florastore.web_ban_hoa.entity.Product;
 import org.springframework.data.jpa.domain.Specification;
 import java.math.BigDecimal;
 
