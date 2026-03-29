@@ -2,8 +2,11 @@ package com.florastore.web_ban_hoa.config;
 
 import com.florastore.web_ban_hoa.entity.Category;
 import com.florastore.web_ban_hoa.entity.Product;
+import com.florastore.web_ban_hoa.entity.Role;
+import com.florastore.web_ban_hoa.entity.User;
 import com.florastore.web_ban_hoa.repository.CategoryRepository;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
+import com.florastore.web_ban_hoa.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,9 +18,17 @@ import java.util.List;
 @Configuration
 public class DataSeeder {
 
+    private static final String DEFAULT_ADMIN_EMAIL = "admin@florastore.local";
+
     @Bean
-    CommandLineRunner seedDatabase(CategoryRepository categoryRepository, ProductRepository productRepository) {
+    CommandLineRunner seedDatabase(
+            CategoryRepository categoryRepository,
+            ProductRepository productRepository,
+            UserRepository userRepository
+    ) {
         return args -> {
+            seedAdminUser(userRepository);
+
             if (categoryRepository.count() > 0 || productRepository.count() > 0) {
                 return;
             }
@@ -58,5 +69,21 @@ public class DataSeeder {
 
             productRepository.saveAll(products);
         };
+    }
+
+    private void seedAdminUser(UserRepository userRepository) {
+        if (userRepository.existsByEmail(DEFAULT_ADMIN_EMAIL)) {
+            return;
+        }
+
+        User adminUser = new User(
+                DEFAULT_ADMIN_EMAIL,
+                "admin123",
+                "System Admin",
+                "0900000000",
+                Role.ADMIN
+        );
+
+        userRepository.save(adminUser);
     }
 }
