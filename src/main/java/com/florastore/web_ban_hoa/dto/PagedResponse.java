@@ -1,5 +1,6 @@
 package com.florastore.web_ban_hoa.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
@@ -18,5 +19,20 @@ public record PagedResponse<T>(
                 page.getNumber(),
                 page.getSize()
         );
+    }
+
+    @JsonProperty("number")
+    public int number() {
+        return currentPage;
+    }
+
+    @JsonProperty("first")
+    public boolean first() {
+        return currentPage == 0;
+    }
+
+    @JsonProperty("last")
+    public boolean last() {
+        return totalPages == 0 || currentPage >= totalPages - 1;
     }
 }
