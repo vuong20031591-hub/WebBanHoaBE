@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+
 @RestController
 @RequestMapping("/api/products")
 public class ProductController {
@@ -26,5 +28,19 @@ public class ProductController {
             @RequestParam(defaultValue = "desc") String direction
     ) {
         return productService.getProducts(page, size, sortBy, direction);
+    }
+
+    @GetMapping("/search")
+    public Page<ProductResponse> searchProducts(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction
+    ) {
+        return productService.searchProducts(name, categoryId, minPrice, maxPrice, page, size, sortBy, direction);
     }
 }
