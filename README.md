@@ -29,17 +29,25 @@ D:\websitebanhoa\WebBanHoaBE\mvnw.cmd -f D:\websitebanhoa\WebBanHoaBE\pom.xml sp
 
 ## Run in production profile (Supabase)
 
+Before running, open Supabase Dashboard -> `Connect` and copy the exact JDBC host/port, username, and password for your chosen connection mode (session pooler/direct).
+
+Never commit real credentials to git. Keep them only in local shell env vars or CI secrets.
+
 ```powershell
 $env:SPRING_PROFILES_ACTIVE='prod'
-$env:SUPABASE_DB_URL='jdbc:postgresql://db.your-project-ref.supabase.co:5432/postgres'
-$env:SUPABASE_DB_USER='postgres'
-$env:SUPABASE_DB_PASSWORD='your_password_here'
+$env:SUPABASE_DB_URL='jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
+$env:SUPABASE_DB_USER='postgres.your_project_ref'
+$env:SUPABASE_DB_PASSWORD='your_real_db_password'
 D:\websitebanhoa\WebBanHoaBE\mvnw.cmd -f D:\websitebanhoa\WebBanHoaBE\pom.xml spring-boot:run
 ```
 
 ## Flyway verification
 
-After starting with `prod`, verify migrations on PostgreSQL:
+After starting with `prod`, verify migrations on Supabase PostgreSQL.
+
+Option 1 (recommended): Supabase Dashboard -> SQL Editor -> run queries below.
+
+Option 2: Any PostgreSQL client connected to the same database.
 
 ```sql
 SELECT installed_rank, version, description, success
