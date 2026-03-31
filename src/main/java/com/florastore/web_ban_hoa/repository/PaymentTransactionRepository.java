@@ -1,0 +1,14 @@
+package com.florastore.web_ban_hoa.repository;
+
+import com.florastore.web_ban_hoa.entity.PaymentMethod;
+import com.florastore.web_ban_hoa.entity.PaymentTransaction;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
+    Optional<PaymentTransaction> findByPaymentMethodAndProviderTransactionId(PaymentMethod paymentMethod, String providerTransactionId);
+
+    List<PaymentTransaction> findByOrderId(Long orderId);
+}

@@ -11,44 +11,40 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "products")
-@SQLDelete(sql = "UPDATE products SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
-@SQLRestriction("deleted_at IS NULL")
+@Table(name = "cart_items", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_cart_items_cart_product", columnNames = {"cart_id", "product_id"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
-public class Product {
+public class CartItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cart_id", nullable = false)
+    private Cart cart;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
+
     @Column(nullable = false)
-    private String name;
+    private Integer quantity;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
-
-    @Column(columnDefinition = "TEXT")
-    private String description;
-
-    private String image;
-
-    @Column(nullable = false)
-    private Integer stockQuantity = 0;
-
-    @Column
-    private LocalDateTime deletedAt;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -56,21 +52,11 @@ public class Product {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
-
-    public Product(String name, BigDecimal price, String description, String image, Category category) {
-        this(name, price, description, image, 0, category);
-    }
-
-    public Product(String name, BigDecimal price, String description, String image, Integer stockQuantity, Category category) {
-        this.name = name;
+    public CartItem(Cart cart, Product product, Integer quantity, BigDecimal price) {
+        this.cart = cart;
+        this.product = product;
+        this.quantity = quantity;
         this.price = price;
-        this.description = description;
-        this.image = image;
-        this.stockQuantity = stockQuantity;
-        this.category = category;
     }
 
     @PrePersist

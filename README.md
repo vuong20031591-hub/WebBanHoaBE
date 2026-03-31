@@ -61,3 +61,56 @@ Expected business tables from `V1`:
 SELECT * FROM categories LIMIT 5;
 SELECT * FROM products LIMIT 5;
 ```
+
+## API contract and Postman
+
+- API contract document: `API_CONTRACT.md`
+- Postman collection: `postman/WebBanHoaBE-Cart.postman_collection.json`
+
+## New ticket coverage
+
+- VUO-69: soft delete for products (`deletedAt`, default filter).
+- VUO-70: admin product management APIs.
+- VUO-74: Cloudflare R2 media upload/delete/signed URL APIs.
+- VUO-77: payment transaction schema and repository usage.
+- VUO-78: COD confirmation flow with status guard.
+- VUO-80: VietQR checkout + webhook handling.
+- VUO-82: SePay checkout + webhook handling.
+
+## Additional environment variables
+
+```powershell
+$env:R2_ENABLED='false'
+$env:R2_ACCOUNT_ID=''
+$env:R2_ACCESS_KEY=''
+$env:R2_SECRET_KEY=''
+$env:R2_BUCKET=''
+$env:R2_REGION='auto'
+$env:R2_PUBLIC_BASE_URL=''
+
+$env:VIETQR_API_BASE_URL='https://api.vietqr.io'
+$env:VIETQR_WEBHOOK_SECRET=''
+$env:VIETQR_SIGNING_SECRET=''
+
+$env:SEPAY_API_BASE_URL='https://my.sepay.vn'
+$env:SEPAY_WEBHOOK_SECRET=''
+$env:SEPAY_SIGNING_SECRET=''
+```
+
+Admin endpoints in this phase use header `X-Role: ADMIN`.
+
+## Cart APIs (VUO-64)
+
+Cart endpoints require `Authorization: Bearer <JWT>` and use `sub` as `userId`.
+
+- `POST /api/cart/items`
+	- Body: `{ "productId": 1, "quantity": 2 }`
+- `GET /api/cart`
+- `PUT /api/cart/items/{id}`
+	- Body: `{ "quantity": 3 }`
+- `DELETE /api/cart/items/{id}`
+
+Validation included:
+
+- Stock check when adding/updating cart items.
+- Price sync using latest product price in cart response.
