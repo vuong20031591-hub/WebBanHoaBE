@@ -5,19 +5,21 @@ import com.florastore.web_ban_hoa.entity.Product;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public record ProductResponse(
+public record ProductDetailResponse(
         Long id,
         String name,
         BigDecimal price,
         String description,
         String image,
-    Integer stockQuantity,
+        Integer stockQuantity,
         LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        LocalDateTime deletedAt,
         Long categoryId,
         String categoryName
 ) {
-    public static ProductResponse fromEntity(Product product) {
-        return new ProductResponse(
+    public static ProductDetailResponse fromEntity(Product product) {
+        return new ProductDetailResponse(
                 product.getId(),
                 product.getName(),
                 product.getPrice(),
@@ -25,6 +27,8 @@ public record ProductResponse(
                 product.getImage(),
                 product.getStockQuantity(),
                 product.getCreatedAt(),
+                product.getUpdatedAt(),
+                product.getDeletedAt(),
                 product.getCategory().getId(),
                 product.getCategory().getName()
         );
