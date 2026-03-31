@@ -213,15 +213,210 @@ Restore soft-deleted product (`deletedAt = null`).
 
 Update stock quantity.
 
-## Order and COD APIs (VUO-78)
+## Authentication APIs (VUO-54, VUO-55)
 
-### POST `/api/orders`
+### POST `/api/auth/register`
 
-Create order with `paymentMethod` (`COD`, `VIETQR`, `SEPAY`).
+Register new user account.
+
+Request body:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "fullName": "John Doe",
+  "phone": "0123456789"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzUxMiJ9..."
+}
+```
+
+### POST `/api/auth/login`
+
+Login and get JWT token.
+
+Request body:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzUxMiJ9..."
+}
+```
+
+## User Profile APIs (VUO-57)
+
+Require `Authorization: Bearer <JWT>`.
+
+### GET `/api/users/me`
+
+Get current user profile.
+
+Response `200`:
+
+```json
+{
+  "id": 1,
+  "email": "user@example.com",
+  "fullName": "John Doe",
+  "phone": "0123456789",
+  "role": "USER"
+}
+```
+
+### PUT `/api/users/me`
+
+Update current user profile.
+
+Request body:
+
+```json
+{
+  "fullName": "John Smith",
+  "phone": "0987654321"
+}
+```
+
+Response `200`: same as GET `/api/users/me`.
+
+### PUT `/api/users/me/password`
+
+Change password.
+
+Request body:
+
+```json
+{
+  "currentPassword": "oldpass123",
+  "newPassword": "newpass456"
+}
+```
+
+Response `200`: success message.
+
+## Address Management APIs (VUO-59)
+
+Require `Authorization: Bearer <JWT>`.
+
+### GET `/api/addresses`
+
+Get all addresses of current user.
+
+Response `200`:
+
+```json
+[
+  {
+    "id": 1,
+    "fullName": "John Doe",
+    "phone": "0123456789",
+    "address": "123 Main St",
+    "city": "Ho Chi Minh",
+    "district": "District 1",
+    "ward": "Ward 1",
+    "isDefault": true
+  }
+]
+```
+
+### POST `/api/addresses`
+
+Create new address.
+
+Request body:
+
+```json
+{
+  "fullName": "John Doe",
+  "phone": "0123456789",
+  "address": "123 Main St",
+  "city": "Ho Chi Minh",
+  "district": "District 1",
+  "ward": "Ward 1"
+}
+```
+
+Response `200`: created address object.
+
+### PUT `/api/addresses/{id}`
+
+Update address.
+
+Request body: same as POST.
+
+Response `200`: updated address object.
+
+### DELETE `/api/addresses/{id}`
+
+Delete address.
+
+Response `204`: no content.
+
+### PATCH `/api/addresses/{id}/set-default`
+
+Set address as default.
+
+Response `200`: updated address object.
+
+## Order APIs (VUO-66, VUO-78)
+
+### POST `/api/orders/from-cart`
+
+Create order from cart. Require `Authorization: Bearer <JWT>`.
+
+Request body:
+
+```json
+{
+  "paymentMethod": "COD"
+}
+```
+
+Response `200`:
+
+```json
+{
+  "id": 1,
+  "userId": "user@example.com",
+  "totalAmount": 700000,
+  "paymentMethod": "COD",
+  "status": "PENDING",
+  "items": [
+    {
+      "id": 1,
+      "productId": 1,
+      "productName": "Bo hong do co dien",
+      "quantity": 2,
+      "price": 350000,
+      "lineTotal": 700000
+    }
+  ],
+  "createdAt": "2026-04-01T01:36:28",
+  "updatedAt": "2026-04-01T01:36:28",
+  "confirmedAt": null
+}
+```
 
 ### GET `/api/orders/{id}`
 
 Get order detail.
+
+Response `200`: same as create order response.
 
 ### POST `/api/orders/{id}/cod/confirm`
 
@@ -229,6 +424,87 @@ Confirm COD order. Rule:
 
 - only `paymentMethod = COD`
 - only `status = PENDING`
+
+Response `200`: order with `status = CONFIRMED` and `confirmedAt` set.
+
+## Admin Order Management APIs (VUO-72)
+
+Require `Authorization: Bearer <JWT>` with ADMIN role.
+
+### GET `/api/admin/orders`
+
+Get all orders with filters and pagination.
+
+Query params:
+
+- `status` (optional, enum: PENDING, CONFIRMED, CANCELLED)
+- `startDate` (optional, ISO datetime)
+- `endDate` (optional, ISO datetime)
+- `search` (optional, search by userId)
+- `page` (optional, default `0`)
+- `size` (optional, default `10`)
+- `sort` (optional, default `createdAt,desc`)
+
+Response `200`:
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "userId": "user@example.com",
+      "totalAmount": 700000,
+      "paymentMethod": "COD",
+      "status": "PENDING",
+      "items": [...],
+      "createdAt": "2026-04-01T01:36:28",
+      "updatedAt": "2026-04-01T01:36:28",
+      "confirmedAt": null
+    }
+  ],
+  "totalElements": 1,
+  "totalPages": 1,
+  "currentPage": 0,
+  "size": 10
+}
+```
+
+### PUT `/api/admin/orders/{id}/status`
+
+Update order status with validation.
+
+Request body:
+
+```json
+{
+  "status": "CONFIRMED"
+}
+```
+
+Valid transitions:
+
+- PENDING → CONFIRMED or CANCELLED
+- CONFIRMED → CANCELLED
+- CANCELLED → (no transitions allowed)
+
+Response `200`: updated order.
+
+Response `400`: invalid status transition.
+
+### GET `/api/admin/orders/stats`
+
+Get order statistics by status.
+
+Response `200`:
+
+```json
+{
+  "pendingCount": 5,
+  "confirmedCount": 10,
+  "cancelledCount": 2,
+  "totalCount": 17
+}
+```
 
 ## Payment APIs (VUO-77, VUO-80, VUO-82)
 

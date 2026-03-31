@@ -2,11 +2,15 @@ package com.florastore.web_ban_hoa.config;
 
 import com.florastore.web_ban_hoa.entity.Category;
 import com.florastore.web_ban_hoa.entity.Product;
+import com.florastore.web_ban_hoa.entity.Role;
+import com.florastore.web_ban_hoa.entity.User;
 import com.florastore.web_ban_hoa.repository.CategoryRepository;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
+import com.florastore.web_ban_hoa.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -16,8 +20,19 @@ import java.util.List;
 public class DataSeeder {
 
     @Bean
-    CommandLineRunner seedDatabase(CategoryRepository categoryRepository, ProductRepository productRepository) {
+    CommandLineRunner seedDatabase(
+            CategoryRepository categoryRepository,
+            ProductRepository productRepository,
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         return args -> {
+            if (userRepository.count() == 0) {
+                User admin = new User("admin@florastore.com", passwordEncoder.encode("admin123"), "Admin User", "0123456789", Role.ADMIN);
+                User user = new User("user@florastore.com", passwordEncoder.encode("user123"), "Test User", "0987654321", Role.USER);
+                userRepository.saveAll(List.of(admin, user));
+            }
+
             if (categoryRepository.count() > 0 || productRepository.count() > 0) {
                 return;
             }

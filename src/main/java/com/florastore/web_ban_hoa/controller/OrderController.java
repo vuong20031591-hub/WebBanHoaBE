@@ -1,16 +1,13 @@
 package com.florastore.web_ban_hoa.controller;
 
+import com.florastore.web_ban_hoa.dto.CreateOrderFromCartRequest;
 import com.florastore.web_ban_hoa.dto.CreateOrderRequest;
 import com.florastore.web_ban_hoa.dto.OrderResponse;
 import com.florastore.web_ban_hoa.service.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -25,6 +22,15 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
         return ResponseEntity.ok(orderService.createOrder(request));
+    }
+
+    @PostMapping("/from-cart")
+    public ResponseEntity<OrderResponse> createOrderFromCart(
+            Authentication authentication,
+            @Valid @RequestBody CreateOrderFromCartRequest request
+    ) {
+        String userId = authentication.getName();
+        return ResponseEntity.ok(orderService.createOrderFromCart(userId, request));
     }
 
     @GetMapping("/{id}")
