@@ -11,6 +11,7 @@ public record ProductResponse(
         BigDecimal price,
         String description,
         String image,
+    Integer stockQuantity,
         LocalDateTime createdAt,
         Long categoryId,
         String categoryName
@@ -22,6 +23,7 @@ public record ProductResponse(
                 product.getPrice(),
                 product.getDescription(),
                 product.getImage(),
+                product.getStockQuantity(),
                 product.getCreatedAt(),
                 product.getCategory().getId(),
                 product.getCategory().getName()

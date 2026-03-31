@@ -14,12 +14,16 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "products")
+@SQLDelete(sql = "UPDATE products SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,6 +45,12 @@ public class Product {
     private String image;
 
     @Column(nullable = false)
+    private Integer stockQuantity = 0;
+
+    @Column
+    private LocalDateTime deletedAt;
+
+    @Column(nullable = false)
     private LocalDateTime createdAt;
 
     @Column(nullable = false)
@@ -51,10 +61,15 @@ public class Product {
     private Category category;
 
     public Product(String name, BigDecimal price, String description, String image, Category category) {
+        this(name, price, description, image, 0, category);
+    }
+
+    public Product(String name, BigDecimal price, String description, String image, Integer stockQuantity, Category category) {
         this.name = name;
         this.price = price;
         this.description = description;
         this.image = image;
+        this.stockQuantity = stockQuantity;
         this.category = category;
     }
 

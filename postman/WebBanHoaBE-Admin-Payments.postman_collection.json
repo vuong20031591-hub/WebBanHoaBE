@@ -1,0 +1,218 @@
+{
+  "info": {
+    "name": "WebBanHoaBE Admin and Payments",
+    "description": "Collection for VUO-69/70/74/77/78/80/82",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "adminRole", "value": "ADMIN" },
+    { "key": "categoryId", "value": "1" },
+    { "key": "productId", "value": "1" },
+    { "key": "orderId", "value": "1" },
+    { "key": "fileKey", "value": "uploads/sample.jpg" }
+  ],
+  "item": [
+    {
+      "name": "Admin Products",
+      "item": [
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin New Flower\",\n  \"price\": 199000,\n  \"description\": \"Created from admin API\",\n  \"image\": \"admin-new.jpg\",\n  \"stockQuantity\": 20,\n  \"categoryId\": {{categoryId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/products"
+          }
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin Updated Flower\",\n  \"price\": 209000,\n  \"description\": \"Updated by admin\",\n  \"image\": \"admin-updated.jpg\",\n  \"stockQuantity\": 25,\n  \"categoryId\": {{categoryId}}\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/products/{{productId}}"
+          }
+        },
+        {
+          "name": "Soft Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/api/admin/products/{{productId}}"
+          }
+        },
+        {
+          "name": "Restore Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/api/admin/products/{{productId}}/restore"
+          }
+        },
+        {
+          "name": "Update Product Stock",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stockQuantity\": 30\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/products/{{productId}}/stock"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders and COD",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"demo-user\",\n  \"totalAmount\": 350000,\n  \"paymentMethod\": \"COD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/orders"
+          }
+        },
+        {
+          "name": "Confirm COD Order",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/orders/{{orderId}}/cod/confirm"
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/orders/{{orderId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "VietQR Checkout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/payments/vietqr/orders/{{orderId}}/checkout"
+          }
+        },
+        {
+          "name": "SePay Checkout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/payments/sepay/orders/{{orderId}}/checkout"
+          }
+        },
+        {
+          "name": "VietQR Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-Signature", "value": "<computed-signature>", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerTransactionId\": \"vietqr-tx-001\",\n  \"orderId\": {{orderId}},\n  \"amount\": 350000,\n  \"secret\": \"<vietqr-webhook-secret>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/payments/vietqr/webhook"
+          }
+        },
+        {
+          "name": "SePay Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-Signature", "value": "<computed-signature>", "type": "text" },
+              { "key": "X-Sepay-Secret", "value": "<sepay-webhook-secret>", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerTransactionId\": \"sepay-tx-001\",\n  \"orderId\": {{orderId}},\n  \"amount\": 350000\n}"
+            },
+            "url": "{{baseUrl}}/api/payments/sepay/webhook"
+          }
+        },
+        {
+          "name": "Reconcile Payment",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/payments/orders/{{orderId}}/reconcile"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cloudflare R2 Upload",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/admin/upload"
+          }
+        },
+        {
+          "name": "Delete Image",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/api/admin/upload/{{fileKey}}"
+          }
+        },
+        {
+          "name": "Generate Signed URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Role", "value": "{{adminRole}}", "type": "text" }
+            ],
+            "url": "{{baseUrl}}/api/admin/upload/{{fileKey}}/signed-url?expiresInSeconds=600"
+          }
+        }
+      ]
+    }
+  ]
+}
