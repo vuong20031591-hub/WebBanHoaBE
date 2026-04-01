@@ -16,7 +16,10 @@ import java.util.List;
 public class DataSeeder {
 
     @Bean
-    CommandLineRunner seedDatabase(CategoryRepository categoryRepository, ProductRepository productRepository) {
+    CommandLineRunner seedDatabase(
+            CategoryRepository categoryRepository,
+            ProductRepository productRepository
+    ) {
         return args -> {
             if (categoryRepository.count() > 0 || productRepository.count() > 0) {
                 return;

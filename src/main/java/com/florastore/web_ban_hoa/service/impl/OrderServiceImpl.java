@@ -2,7 +2,6 @@ package com.florastore.web_ban_hoa.service.impl;
 
 import com.florastore.web_ban_hoa.dto.*;
 import com.florastore.web_ban_hoa.entity.*;
-import com.florastore.web_ban_hoa.repository.AddressRepository;
 import com.florastore.web_ban_hoa.repository.CartRepository;
 import com.florastore.web_ban_hoa.repository.OrderItemRepository;
 import com.florastore.web_ban_hoa.repository.OrderRepository;
@@ -29,21 +28,18 @@ public class OrderServiceImpl implements OrderService {
     private final CartService cartService;
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
-    private final AddressRepository addressRepository;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
             CartRepository cartRepository,
             CartService cartService,
             OrderItemRepository orderItemRepository,
-            ProductRepository productRepository,
-            AddressRepository addressRepository) {
+            ProductRepository productRepository) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
         this.cartService = cartService;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
-        this.addressRepository = addressRepository;
     }
 
     @Override
@@ -84,11 +80,6 @@ public class OrderServiceImpl implements OrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot create order from empty cart");
         }
 
-        if (request.addressId() != null) {
-            addressRepository.findByIdAndUserId(request.addressId(), userId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid address"));
-        }
-
         BigDecimal totalAmount = BigDecimal.ZERO;
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
@@ -127,23 +118,14 @@ public class OrderServiceImpl implements OrderService {
 
         cartService.clearCart(userId);
 
-        List<OrderItemResponse> items = orderItemRepository.findByOrderId(savedOrder.getId())
-                .stream()
-                .map(OrderItemResponse::from)
-                .toList();
-
-        return OrderResponse.fromEntityWithItems(savedOrder, items);
+        return OrderResponse.fromEntity(savedOrder);
     }
 
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrder(String userId, Long orderId) {
         Order order = getOwnedOrderOrThrow(userId, orderId);
-        List<OrderItemResponse> items = orderItemRepository.findByOrderId(orderId)
-                .stream()
-                .map(OrderItemResponse::from)
-                .toList();
-        return OrderResponse.fromEntityWithItems(order, items);
+        return OrderResponse.fromEntity(order);
     }
 
     @Override
@@ -151,11 +133,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse getLatestOrder(String userId) {
         Order order = orderRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        List<OrderItemResponse> items = orderItemRepository.findByOrderId(order.getId())
-                .stream()
-                .map(OrderItemResponse::from)
-                .toList();
-        return OrderResponse.fromEntityWithItems(order, items);
+        return OrderResponse.fromEntity(order);
     }
 
     @Override
@@ -172,11 +150,7 @@ public class OrderServiceImpl implements OrderService {
         order.setConfirmedAt(LocalDateTime.now());
         Order savedOrder = orderRepository.save(order);
 
-        List<OrderItemResponse> items = orderItemRepository.findByOrderId(orderId)
-                .stream()
-                .map(OrderItemResponse::from)
-                .toList();
-        return OrderResponse.fromEntityWithItems(savedOrder, items);
+        return OrderResponse.fromEntity(savedOrder);
     }
 
     @Override
@@ -184,56 +158,22 @@ public class OrderServiceImpl implements OrderService {
     public List<OrderResponse> getUserOrders(String userId) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .map(order -> {
-                    List<OrderItemResponse> items = orderItemRepository.findByOrderId(order.getId())
-                            .stream()
-                            .map(OrderItemResponse::from)
-                            .toList();
-                    return OrderResponse.fromEntityWithItems(order, items);
-                })
+                .map(OrderResponse::fromEntity)
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PagedResponse<OrderResponse> getOrdersForAdmin(
+    public PagedResponse<OrderResponse> getOrdersWithFilters(
             OrderStatus status,
             LocalDateTime startDate,
             LocalDateTime endDate,
-            String searchUserId,
+            String search,
             Pageable pageable) {
 
-        Page<Order> orderPage;
+        Page<Order> orderPage = orderRepository.findByFilters(status, startDate, endDate, search, pageable);
 
-        if (status != null && startDate != null && endDate != null) {
-            orderPage = orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(status, startDate, endDate, pageable);
-        } else if (status != null) {
-            orderPage = orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
-        } else if (startDate != null && endDate != null) {
-            orderPage = orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate, pageable);
-        } else {
-            orderPage = orderRepository.findAll(pageable);
-        }
-
-        List<OrderResponse> content = orderPage.getContent()
-                .stream()
-                .filter(order -> searchUserId == null || order.getUserId().contains(searchUserId))
-                .map(order -> {
-                    List<OrderItemResponse> items = orderItemRepository.findByOrderId(order.getId())
-                            .stream()
-                            .map(OrderItemResponse::from)
-                            .toList();
-                    return OrderResponse.fromEntityWithItems(order, items);
-                })
-                .toList();
-
-        return new PagedResponse<>(
-                content,
-                orderPage.getTotalElements(),
-                orderPage.getTotalPages(),
-                orderPage.getNumber(),
-                orderPage.getSize()
-        );
+        return PagedResponse.from(orderPage.map(OrderResponse::fromEntity));
     }
 
     @Override
@@ -263,12 +203,7 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        List<OrderItemResponse> items = orderItemRepository.findByOrderId(savedOrder.getId())
-                .stream()
-                .map(OrderItemResponse::from)
-                .toList();
-
-        return OrderResponse.fromEntityWithItems(savedOrder, items);
+        return OrderResponse.fromEntity(savedOrder);
     }
 
     @Override

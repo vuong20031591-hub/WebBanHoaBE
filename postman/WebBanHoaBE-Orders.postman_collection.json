@@ -1,0 +1,348 @@
+{
+	"info": {
+		"name": "WebBanHoaBE - Order APIs",
+		"description": "Collection for Order and Admin Order Management APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "adminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "userToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "orderId",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Setup - Login",
+			"item": [
+				{
+					"name": "Login Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"adminToken\", jsonData.token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@florastore.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"userToken\", jsonData.token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@florastore.com\",\n  \"password\": \"user123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "User Orders",
+			"item": [
+				{
+					"name": "Create Order from Cart",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"orderId\", jsonData.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{userToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"paymentMethod\": \"COD\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/from-cart",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "orders", "from-cart"]
+						}
+					}
+				},
+				{
+					"name": "Get Order Detail",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "orders", "{{orderId}}"]
+						}
+					}
+				},
+				{
+					"name": "Confirm COD Order",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/orders/{{orderId}}/cod/confirm",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "orders", "{{orderId}}", "cod", "confirm"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin Order Management",
+			"item": [
+				{
+					"name": "Get All Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders?page=0&size=10&sort=createdAt,desc",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								},
+								{
+									"key": "sort",
+									"value": "createdAt,desc"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filter Orders by Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders?status=PENDING",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders"],
+							"query": [
+								{
+									"key": "status",
+									"value": "PENDING"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filter Orders by Date Range",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders?startDate=2026-04-01T00:00:00&endDate=2026-04-02T00:00:00",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders"],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2026-04-01T00:00:00"
+								},
+								{
+									"key": "endDate",
+									"value": "2026-04-02T00:00:00"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Search Orders by User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders?search=user@florastore.com",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders"],
+							"query": [
+								{
+									"key": "search",
+									"value": "user@florastore.com"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Order Status to CONFIRMED",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"CONFIRMED\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/{{orderId}}/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders", "{{orderId}}", "status"]
+						}
+					}
+				},
+				{
+					"name": "Update Order Status to CANCELLED",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"CANCELLED\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/{{orderId}}/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders", "{{orderId}}", "status"]
+						}
+					}
+				},
+				{
+					"name": "Get Order Statistics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/orders/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "admin", "orders", "stats"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

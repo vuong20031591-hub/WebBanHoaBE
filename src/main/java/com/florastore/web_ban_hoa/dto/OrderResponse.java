@@ -12,36 +12,26 @@ public record OrderResponse(
         BigDecimal totalAmount,
         String paymentMethod,
         String status,
+        List<OrderItemResponse> items,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        LocalDateTime confirmedAt,
-        List<OrderItemResponse> items
+        LocalDateTime confirmedAt
 ) {
     public static OrderResponse fromEntity(Order order) {
-        return new OrderResponse(
-                order.getId(),
-                order.getUserId(),
-                order.getTotalAmount(),
-                order.getPaymentMethod().name(),
-                order.getStatus().name(),
-                order.getCreatedAt(),
-                order.getUpdatedAt(),
-                order.getConfirmedAt(),
-                null
-        );
-    }
+        List<OrderItemResponse> items = order.getItems().stream()
+                .map(OrderItemResponse::from)
+                .toList();
 
-    public static OrderResponse fromEntityWithItems(Order order, List<OrderItemResponse> items) {
         return new OrderResponse(
                 order.getId(),
                 order.getUserId(),
                 order.getTotalAmount(),
                 order.getPaymentMethod().name(),
                 order.getStatus().name(),
+                items,
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
-                order.getConfirmedAt(),
-                items
+                order.getConfirmedAt()
         );
     }
 }

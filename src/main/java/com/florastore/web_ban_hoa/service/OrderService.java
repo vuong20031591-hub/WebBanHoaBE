@@ -20,7 +20,13 @@ public interface OrderService {
 
     List<OrderResponse> getUserOrders(String userId);
 
-    PagedResponse<OrderResponse> getOrdersForAdmin(OrderStatus status, LocalDateTime startDate, LocalDateTime endDate, String searchUserId, Pageable pageable);
+    PagedResponse<OrderResponse> getOrdersWithFilters(
+            OrderStatus status,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            String search,
+            Pageable pageable
+    );
 
     OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus);
 

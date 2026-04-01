@@ -46,7 +46,7 @@ public class AdminOrderController {
         Sort.Direction direction = sortDir.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        return ResponseEntity.ok(orderService.getOrdersForAdmin(status, startDate, endDate, userId, pageable));
+        return ResponseEntity.ok(orderService.getOrdersWithFilters(status, startDate, endDate, userId, pageable));
     }
 
     @PutMapping("/{id}/status")
