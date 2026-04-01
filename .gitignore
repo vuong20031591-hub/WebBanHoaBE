@@ -36,3 +36,6 @@ build/
 .env
 .env.*
 !.env.sample
+
+### Application properties with credentials ###
+src/main/resources/application.properties

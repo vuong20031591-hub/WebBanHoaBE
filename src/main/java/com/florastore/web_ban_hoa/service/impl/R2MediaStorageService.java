@@ -112,7 +112,7 @@ public class R2MediaStorageService implements MediaStorageService {
         if (originalFilename != null && originalFilename.contains(".")) {
             extension = originalFilename.substring(originalFilename.lastIndexOf('.'));
         }
-        return "uploads/" + UUID.randomUUID() + extension;
+        return "uploads-" + UUID.randomUUID() + extension;
     }
 
     private String buildPublicUrl(String key) {

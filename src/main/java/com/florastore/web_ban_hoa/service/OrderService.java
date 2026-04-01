@@ -4,9 +4,11 @@ import com.florastore.web_ban_hoa.dto.CreateOrderRequest;
 import com.florastore.web_ban_hoa.dto.OrderResponse;
 
 public interface OrderService {
-    OrderResponse createOrder(CreateOrderRequest request);
+    OrderResponse createOrder(String userId, CreateOrderRequest request);
 
-    OrderResponse getOrder(Long orderId);
+    OrderResponse getOrder(String userId, Long orderId);
 
-    OrderResponse confirmCodOrder(Long orderId);
+    OrderResponse getLatestOrder(String userId);
+
+    OrderResponse confirmCodOrder(String userId, Long orderId);
 }
