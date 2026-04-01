@@ -10,16 +10,17 @@ public record OrderItemResponse(
         String productName,
         Integer quantity,
         BigDecimal price,
-        BigDecimal lineTotal
+        BigDecimal subtotal
 ) {
-    public static OrderItemResponse fromEntity(OrderItem item) {
+    public static OrderItemResponse from(OrderItem item) {
+        BigDecimal subtotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
         return new OrderItemResponse(
                 item.getId(),
                 item.getProductId(),
                 item.getProductName(),
                 item.getQuantity(),
                 item.getPrice(),
-                item.getLineTotal()
+                subtotal
         );
     }
 }

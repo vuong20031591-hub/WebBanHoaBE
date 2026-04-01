@@ -5,6 +5,7 @@ import com.florastore.web_ban_hoa.dto.OrderResponse;
 import com.florastore.web_ban_hoa.dto.PagedResponse;
 import com.florastore.web_ban_hoa.dto.UpdateOrderStatusRequest;
 import com.florastore.web_ban_hoa.entity.OrderStatus;
+import com.florastore.web_ban_hoa.security.AdminRoleGuard;
 import com.florastore.web_ban_hoa.service.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
@@ -12,51 +13,57 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/admin/orders")
-@PreAuthorize("hasRole('ADMIN')")
 public class AdminOrderController {
 
     private final OrderService orderService;
+    private final AdminRoleGuard adminRoleGuard;
 
-    public AdminOrderController(OrderService orderService) {
+    public AdminOrderController(OrderService orderService, AdminRoleGuard adminRoleGuard) {
         this.orderService = orderService;
+        this.adminRoleGuard = adminRoleGuard;
     }
 
     @GetMapping
     public ResponseEntity<PagedResponse<OrderResponse>> getOrders(
+            @RequestHeader(name = "X-Role", required = false) String role,
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String userId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "createdAt,desc") String sort
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDir
     ) {
-        String[] sortParams = sort.split(",");
-        Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc") 
-                ? Sort.Direction.ASC 
-                : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortParams[0]));
-        
-        return ResponseEntity.ok(orderService.getOrdersWithFilters(status, startDate, endDate, search, pageable));
+        adminRoleGuard.assertAdmin(role);
+
+        Sort.Direction direction = sortDir.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+
+        return ResponseEntity.ok(orderService.getOrdersWithFilters(status, startDate, endDate, userId, pageable));
     }
 
     @PutMapping("/{id}/status")
     public ResponseEntity<OrderResponse> updateOrderStatus(
+            @RequestHeader(name = "X-Role", required = false) String role,
             @PathVariable Long id,
             @Valid @RequestBody UpdateOrderStatusRequest request
     ) {
+        adminRoleGuard.assertAdmin(role);
         return ResponseEntity.ok(orderService.updateOrderStatus(id, request.status()));
     }
 
     @GetMapping("/stats")
-    public ResponseEntity<AdminOrderStatsResponse> getOrderStats() {
+    public ResponseEntity<AdminOrderStatsResponse> getOrderStats(
+            @RequestHeader(name = "X-Role", required = false) String role
+    ) {
+        adminRoleGuard.assertAdmin(role);
         return ResponseEntity.ok(orderService.getOrderStats());
     }
 }

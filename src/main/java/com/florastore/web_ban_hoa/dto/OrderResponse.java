@@ -19,7 +19,7 @@ public record OrderResponse(
 ) {
     public static OrderResponse fromEntity(Order order) {
         List<OrderItemResponse> items = order.getItems().stream()
-                .map(OrderItemResponse::fromEntity)
+                .map(OrderItemResponse::from)
                 .toList();
 
         return new OrderResponse(

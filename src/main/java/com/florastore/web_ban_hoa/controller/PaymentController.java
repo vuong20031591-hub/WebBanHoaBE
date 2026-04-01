@@ -4,6 +4,7 @@ import com.florastore.web_ban_hoa.dto.PaymentCheckoutResponse;
 import com.florastore.web_ban_hoa.dto.PaymentReconciliationResponse;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookRequest;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookResult;
+import com.florastore.web_ban_hoa.security.JwtSubjectResolver;
 import com.florastore.web_ban_hoa.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -20,19 +21,29 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final JwtSubjectResolver jwtSubjectResolver;
 
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(PaymentService paymentService, JwtSubjectResolver jwtSubjectResolver) {
         this.paymentService = paymentService;
+        this.jwtSubjectResolver = jwtSubjectResolver;
     }
 
     @PostMapping("/vietqr/orders/{orderId}/checkout")
-    public ResponseEntity<PaymentCheckoutResponse> createVietQrCheckout(@PathVariable Long orderId) {
-        return ResponseEntity.ok(paymentService.generateVietQrCheckout(orderId));
+    public ResponseEntity<PaymentCheckoutResponse> createVietQrCheckout(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable Long orderId
+    ) {
+        String userId = jwtSubjectResolver.resolveUserId(authorization);
+        return ResponseEntity.ok(paymentService.generateVietQrCheckout(userId, orderId));
     }
 
     @PostMapping("/sepay/orders/{orderId}/checkout")
-    public ResponseEntity<PaymentCheckoutResponse> createSePayCheckout(@PathVariable Long orderId) {
-        return ResponseEntity.ok(paymentService.generateSePayCheckout(orderId));
+    public ResponseEntity<PaymentCheckoutResponse> createSePayCheckout(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable Long orderId
+    ) {
+        String userId = jwtSubjectResolver.resolveUserId(authorization);
+        return ResponseEntity.ok(paymentService.generateSePayCheckout(userId, orderId));
     }
 
     @PostMapping("/vietqr/webhook")
@@ -53,7 +64,11 @@ public class PaymentController {
     }
 
     @GetMapping("/orders/{orderId}/reconcile")
-    public ResponseEntity<PaymentReconciliationResponse> reconcile(@PathVariable Long orderId) {
-        return ResponseEntity.ok(paymentService.reconcileOrderPayments(orderId));
+    public ResponseEntity<PaymentReconciliationResponse> reconcile(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable Long orderId
+    ) {
+        String userId = jwtSubjectResolver.resolveUserId(authorization);
+        return ResponseEntity.ok(paymentService.reconcileOrderPayments(userId, orderId));
     }
 }

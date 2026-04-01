@@ -3,8 +3,10 @@ package com.florastore.web_ban_hoa.service.impl;
 import com.florastore.web_ban_hoa.dto.*;
 import com.florastore.web_ban_hoa.entity.*;
 import com.florastore.web_ban_hoa.repository.CartRepository;
+import com.florastore.web_ban_hoa.repository.OrderItemRepository;
 import com.florastore.web_ban_hoa.repository.OrderRepository;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
+import com.florastore.web_ban_hoa.service.CartService;
 import com.florastore.web_ban_hoa.service.OrderService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @Transactional
@@ -22,75 +25,120 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
+    private final CartService cartService;
+    private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
 
-    public OrderServiceImpl(OrderRepository orderRepository, CartRepository cartRepository, ProductRepository productRepository) {
+    public OrderServiceImpl(
+            OrderRepository orderRepository,
+            CartRepository cartRepository,
+            CartService cartService,
+            OrderItemRepository orderItemRepository,
+            ProductRepository productRepository) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
+        this.cartService = cartService;
+        this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
     }
 
     @Override
-    public OrderResponse createOrder(CreateOrderRequest request) {
-        Order order = new Order(request.userId(), request.totalAmount(), request.paymentMethod());
-        return OrderResponse.fromEntity(orderRepository.save(order));
+    public OrderResponse createOrder(String userId, CreateOrderRequest request) {
+        Cart cart = loadCartOrThrow(userId);
+        if (cart.getItems().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot create order from empty cart");
+        }
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (CartItem item : cart.getItems()) {
+            Product product = item.getProduct();
+            if (product == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart contains invalid product");
+            }
+
+            Integer stockQuantity = product.getStockQuantity();
+            if (stockQuantity == null || item.getQuantity() > stockQuantity) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Insufficient stock for product id " + product.getId()
+                );
+            }
+
+            totalAmount = totalAmount.add(product.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+        }
+
+        Order order = new Order(userId, totalAmount, request.paymentMethod());
+        Order savedOrder = orderRepository.save(order);
+        cartService.clearCart(userId);
+        return OrderResponse.fromEntity(savedOrder);
     }
 
     @Override
     public OrderResponse createOrderFromCart(String userId, CreateOrderFromCartRequest request) {
-        Cart cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty"));
-
+        Cart cart = loadCartOrThrow(userId);
         if (cart.getItems().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot create order from empty cart");
         }
 
         BigDecimal totalAmount = BigDecimal.ZERO;
-        Order order = new Order(userId, totalAmount, request.paymentMethod());
-
-        for (CartItem cartItem : cart.getItems()) {
-            Product product = productRepository.findById(cartItem.getProduct().getId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
-
-            if (product.getStockQuantity() < cartItem.getQuantity()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                    "Insufficient stock for product: " + product.getName());
+        for (CartItem item : cart.getItems()) {
+            Product product = item.getProduct();
+            if (product == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart contains invalid product");
             }
 
-            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-            productRepository.save(product);
+            Integer stockQuantity = product.getStockQuantity();
+            if (stockQuantity == null || item.getQuantity() > stockQuantity) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Insufficient stock for product id " + product.getId()
+                );
+            }
 
-            BigDecimal lineTotal = cartItem.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-            totalAmount = totalAmount.add(lineTotal);
-
-            OrderItem orderItem = new OrderItem(
-                    order,
-                    product.getId(),
-                    product.getName(),
-                    cartItem.getQuantity(),
-                    cartItem.getPrice()
-            );
-            order.getItems().add(orderItem);
+            totalAmount = totalAmount.add(product.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
         }
 
-        order.setTotalAmount(totalAmount);
-        order = orderRepository.save(order);
+        Order order = new Order(userId, totalAmount, request.paymentMethod());
+        Order savedOrder = orderRepository.save(order);
 
-        cart.getItems().clear();
-        cartRepository.save(cart);
+        for (CartItem item : cart.getItems()) {
+            Product product = item.getProduct();
+            OrderItem orderItem = new OrderItem(
+                    savedOrder.getId(),
+                    product.getId(),
+                    product.getName(),
+                    item.getQuantity(),
+                    product.getPrice()
+            );
+            orderItemRepository.save(orderItem);
 
+            product.setStockQuantity(product.getStockQuantity() - item.getQuantity());
+            productRepository.save(product);
+        }
+
+        cartService.clearCart(userId);
+
+        return OrderResponse.fromEntity(savedOrder);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getOrder(String userId, Long orderId) {
+        Order order = getOwnedOrderOrThrow(userId, orderId);
         return OrderResponse.fromEntity(order);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public OrderResponse getOrder(Long orderId) {
-        return OrderResponse.fromEntity(getOrderOrThrow(orderId));
+    public OrderResponse getLatestOrder(String userId) {
+        Order order = orderRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        return OrderResponse.fromEntity(order);
     }
 
     @Override
-    public OrderResponse confirmCodOrder(Long orderId) {
-        Order order = getOrderOrThrow(orderId);
+    public OrderResponse confirmCodOrder(String userId, Long orderId) {
+        Order order = getOwnedOrderOrThrow(userId, orderId);
         if (order.getPaymentMethod() != PaymentMethod.COD) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order payment method is not COD");
         }
@@ -100,7 +148,18 @@ public class OrderServiceImpl implements OrderService {
 
         order.setStatus(OrderStatus.CONFIRMED);
         order.setConfirmedAt(LocalDateTime.now());
-        return OrderResponse.fromEntity(orderRepository.save(order));
+        Order savedOrder = orderRepository.save(order);
+
+        return OrderResponse.fromEntity(savedOrder);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getUserOrders(String userId) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(OrderResponse::fromEntity)
+                .toList();
     }
 
     @Override
@@ -110,55 +169,62 @@ public class OrderServiceImpl implements OrderService {
             LocalDateTime startDate,
             LocalDateTime endDate,
             String search,
-            Pageable pageable
-    ) {
-        Page<Order> page = orderRepository.findByFilters(status, startDate, endDate, search, pageable);
-        return PagedResponse.from(page.map(OrderResponse::fromEntity));
+            Pageable pageable) {
+
+        Page<Order> orderPage = orderRepository.findByFilters(status, startDate, endDate, search, pageable);
+
+        return PagedResponse.from(orderPage.map(OrderResponse::fromEntity));
     }
 
     @Override
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus) {
-        Order order = getOrderOrThrow(orderId);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+
         OrderStatus currentStatus = order.getStatus();
 
-        if (!isValidStatusTransition(currentStatus, newStatus)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                String.format("Invalid status transition from %s to %s", currentStatus, newStatus));
+        if (currentStatus == OrderStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot change status of cancelled order");
         }
 
-        order.setStatus(newStatus);
-        if (newStatus == OrderStatus.CONFIRMED && order.getConfirmedAt() == null) {
+        if (currentStatus == OrderStatus.PENDING && newStatus == OrderStatus.CANCELLED) {
+            order.setStatus(newStatus);
+        } else if (currentStatus == OrderStatus.PENDING && newStatus == OrderStatus.CONFIRMED) {
+            order.setStatus(newStatus);
             order.setConfirmedAt(LocalDateTime.now());
+        } else if (currentStatus == OrderStatus.CONFIRMED && newStatus == OrderStatus.CANCELLED) {
+            order.setStatus(newStatus);
+        } else {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid status transition from " + currentStatus + " to " + newStatus
+            );
         }
-        
-        return OrderResponse.fromEntity(orderRepository.save(order));
+
+        Order savedOrder = orderRepository.save(order);
+
+        return OrderResponse.fromEntity(savedOrder);
     }
 
     @Override
     @Transactional(readOnly = true)
     public AdminOrderStatsResponse getOrderStats() {
-        long pendingCount = orderRepository.countByStatus(OrderStatus.PENDING);
-        long confirmedCount = orderRepository.countByStatus(OrderStatus.CONFIRMED);
-        long cancelledCount = orderRepository.countByStatus(OrderStatus.CANCELLED);
-        long totalCount = orderRepository.count();
-        
-        return new AdminOrderStatsResponse(pendingCount, confirmedCount, cancelledCount, totalCount);
+        Long total = orderRepository.count();
+        Long pending = orderRepository.countByStatus(OrderStatus.PENDING);
+        Long confirmed = orderRepository.countByStatus(OrderStatus.CONFIRMED);
+        Long cancelled = orderRepository.countByStatus(OrderStatus.CANCELLED);
+
+        return new AdminOrderStatsResponse(total, pending, confirmed, cancelled);
     }
 
-    private boolean isValidStatusTransition(OrderStatus current, OrderStatus next) {
-        if (current == next) {
-            return false;
-        }
-        
-        return switch (current) {
-            case PENDING -> next == OrderStatus.CONFIRMED || next == OrderStatus.CANCELLED;
-            case CONFIRMED -> next == OrderStatus.CANCELLED;
-            case CANCELLED -> false;
-        };
+    private Cart loadCartOrThrow(String userId) {
+        return cartRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart not found"));
     }
 
-    private Order getOrderOrThrow(Long orderId) {
+    private Order getOwnedOrderOrThrow(String userId, Long orderId) {
         return orderRepository.findById(orderId)
+                .filter(order -> order.getUserId().equals(userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
     }
 }

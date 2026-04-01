@@ -9,9 +9,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
-    
+    List<Order> findByStatus(OrderStatus status);
+
+    Optional<Order> findFirstByUserIdOrderByCreatedAtDesc(String userId);
+
+    List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
+
+    Page<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status, Pageable pageable);
+
+    Page<Order> findByCreatedAtBetweenOrderByCreatedAtDesc(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+
+    Page<Order> findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(OrderStatus status, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+
     @Query("SELECT o FROM Order o WHERE " +
            "(:status IS NULL OR o.status = :status) AND " +
            "(:startDate IS NULL OR o.createdAt >= :startDate) AND " +
@@ -24,6 +37,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("search") String search,
             Pageable pageable
     );
-    
+
     long countByStatus(OrderStatus status);
 }

@@ -18,11 +18,10 @@ public class OrderItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    @Column(name = "order_id", nullable = false)
+    private Long orderId;
 
-    @Column(name = "product_id", nullable = false)
+    @Column(name = "product_id")
     private Long productId;
 
     @Column(name = "product_name", nullable = false, length = 255)
@@ -34,15 +33,11 @@ public class OrderItem {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "line_total", nullable = false, precision = 12, scale = 2)
-    private BigDecimal lineTotal;
-
-    public OrderItem(Order order, Long productId, String productName, Integer quantity, BigDecimal price) {
-        this.order = order;
+    public OrderItem(Long orderId, Long productId, String productName, Integer quantity, BigDecimal price) {
+        this.orderId = orderId;
         this.productId = productId;
         this.productName = productName;
         this.quantity = quantity;
         this.price = price;
-        this.lineTotal = price.multiply(BigDecimal.valueOf(quantity));
     }
 }

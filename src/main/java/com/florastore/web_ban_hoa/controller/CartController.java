@@ -31,7 +31,7 @@ public class CartController {
 
     @PostMapping("/items")
     public ResponseEntity<CartResponse> addItem(
-            @RequestHeader("Authorization") String authorization,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @Valid @RequestBody AddCartItemRequest request
     ) {
         String userId = jwtSubjectResolver.resolveUserId(authorization);
@@ -39,14 +39,14 @@ public class CartController {
     }
 
     @GetMapping
-    public ResponseEntity<CartResponse> getCart(@RequestHeader("Authorization") String authorization) {
+    public ResponseEntity<CartResponse> getCart(@RequestHeader(name = "Authorization", required = false) String authorization) {
         String userId = jwtSubjectResolver.resolveUserId(authorization);
         return ResponseEntity.ok(cartService.getCart(userId));
     }
 
     @PutMapping("/items/{id}")
     public ResponseEntity<CartResponse> updateItem(
-            @RequestHeader("Authorization") String authorization,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable Long id,
             @Valid @RequestBody UpdateCartItemRequest request
     ) {
@@ -56,7 +56,7 @@ public class CartController {
 
     @DeleteMapping("/items/{id}")
     public ResponseEntity<Void> deleteItem(
-            @RequestHeader("Authorization") String authorization,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable Long id
     ) {
         String userId = jwtSubjectResolver.resolveUserId(authorization);
