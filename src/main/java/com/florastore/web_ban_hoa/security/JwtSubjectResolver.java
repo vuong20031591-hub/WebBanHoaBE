@@ -1,18 +1,18 @@
 package com.florastore.web_ban_hoa.security;
 
+import com.florastore.web_ban_hoa.service.JwtService;
+import io.jsonwebtoken.Claims;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Map;
-
 @Component
 public class JwtSubjectResolver {
 
-    private final SupabaseJwtValidator supabaseJwtValidator;
+    private final JwtService jwtService;
 
-    public JwtSubjectResolver(SupabaseJwtValidator supabaseJwtValidator) {
-        this.supabaseJwtValidator = supabaseJwtValidator;
+    public JwtSubjectResolver(JwtService jwtService) {
+        this.jwtService = jwtService;
     }
 
     public String resolveUserId(String authorizationHeader) {
@@ -21,7 +21,7 @@ public class JwtSubjectResolver {
         }
 
         String token = authorizationHeader.substring(7).trim();
-        Map<String, Object> claims = supabaseJwtValidator.validateAndParse(token);
-        return supabaseJwtValidator.extractUserId(claims);
+        Claims claims = jwtService.validateAndParse(token);
+        return jwtService.extractUserId(claims);
     }
 }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
+@ActiveProfiles("dev")
 class CartControllerIntegrationTest {
 
     @Autowired
@@ -31,7 +33,7 @@ class CartControllerIntegrationTest {
     void setup() {
         Product product = productRepository.findAll().stream().findFirst().orElseThrow();
         productId = product.getId();
-        userId = "user-cart-test-" + UUID.randomUUID();
+        userId = "1";
     }
 
     @Test

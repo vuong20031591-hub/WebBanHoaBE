@@ -1,5 +1,6 @@
 package com.florastore.web_ban_hoa;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -16,13 +17,15 @@ public class WebBanHoaApplication {
 	}
 
 	@Bean
-	public WebMvcConfigurer corsConfigurer() {
+	public WebMvcConfigurer corsConfigurer(@Value("${security.cors.allowed-origins}") String allowedOrigins) {
 		return new WebMvcConfigurer() {
 			@Override
 			public void addCorsMappings(CorsRegistry registry) {
 				registry.addMapping("/api/**")
-						.allowedOrigins("http://localhost:3000")
-						.allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+						.allowedOrigins(allowedOrigins.split(","))
+						.allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+						.allowCredentials(true)
+						.allowedHeaders("*");
 			}
 		};
 	}

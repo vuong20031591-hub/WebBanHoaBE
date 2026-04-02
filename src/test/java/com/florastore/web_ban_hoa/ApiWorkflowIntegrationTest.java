@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -22,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("dev")
 class ApiWorkflowIntegrationTest {
 
     @Autowired
@@ -33,6 +35,9 @@ class ApiWorkflowIntegrationTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private TestJwtHelper jwtHelper;
+
     @Test
     void cartWithoutAuthorization_shouldReturnUnauthorized() throws Exception {
         mockMvc.perform(get("/api/cart"))
@@ -41,14 +46,14 @@ class ApiWorkflowIntegrationTest {
 
     @Test
     void createOrder_shouldUseAuthenticatedUserCartTotal() throws Exception {
-        String userId = "api-user-" + UUID.randomUUID();
+        String userId = "1";
         Product product = productRepository.findAll().stream().findFirst().orElseThrow();
         cartService.addItem(userId, product.getId(), 2);
 
         BigDecimal expectedTotal = product.getPrice().multiply(BigDecimal.valueOf(2));
 
         mockMvc.perform(post("/api/orders")
-                        .header("Authorization", bearer(userId))
+                        .header("Authorization", jwtHelper.bearer(userId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paymentMethod\":\"VIETQR\"}"))
                 .andExpect(status().isOk())
@@ -57,7 +62,7 @@ class ApiWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.totalAmount").value(expectedTotal.doubleValue()));
 
         mockMvc.perform(get("/api/cart")
-                        .header("Authorization", bearer(userId)))
+                        .header("Authorization", jwtHelper.bearer(userId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalItems").value(0))
                 .andExpect(jsonPath("$.totalAmount").value(0));
@@ -67,13 +72,5 @@ class ApiWorkflowIntegrationTest {
     void checkoutWithoutAuthorization_shouldReturnUnauthorized() throws Exception {
         mockMvc.perform(post("/api/payments/vietqr/orders/999/checkout"))
                 .andExpect(status().isUnauthorized());
-    }
-
-    private String bearer(String userId) {
-        String header = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(("{\"sub\":\"" + userId + "\"}").getBytes(StandardCharsets.UTF_8));
-        return "Bearer " + header + "." + payload + ".signature";
     }
 }
