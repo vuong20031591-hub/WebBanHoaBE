@@ -14,6 +14,7 @@ import com.florastore.web_ban_hoa.service.PaymentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 
 import javax.crypto.Mac;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "payments.vietqr.signing-secret=test-sign",
         "payments.vietqr.webhook-secret=test-secret"
 })
+@ActiveProfiles("dev")
 class PaymentServiceIntegrationTest {
 
     @Autowired
@@ -46,7 +48,7 @@ class PaymentServiceIntegrationTest {
 
     @Test
     void codConfirm_shouldUpdatePendingCodOrder() {
-        String userId = "cod-user-" + UUID.randomUUID();
+        String userId = "1";
         seedCart(userId, 2);
 
         OrderResponse order = orderService.createOrder(userId, new CreateOrderRequest(PaymentMethod.COD));
@@ -57,7 +59,7 @@ class PaymentServiceIntegrationTest {
 
     @Test
     void vietQrWebhook_shouldBeIdempotent() {
-        String userId = "vietqr-user-" + UUID.randomUUID();
+        String userId = "2";
         seedCart(userId, 1);
 
         OrderResponse order = orderService.createOrder(userId, new CreateOrderRequest(PaymentMethod.VIETQR));
@@ -96,7 +98,7 @@ class PaymentServiceIntegrationTest {
 
     @Test
     void generateCheckout_shouldCreateRandomPendingTransactionId() {
-        String userId = "random-qr-user-" + UUID.randomUUID();
+        String userId = "3";
         seedCart(userId, 1);
 
         OrderResponse order = orderService.createOrder(userId, new CreateOrderRequest(PaymentMethod.VIETQR));

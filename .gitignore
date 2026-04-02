@@ -35,7 +35,4 @@ build/
 ### Local env files (never commit secrets) ###
 .env
 .env.*
-!.env.sample
-
-### Application properties with credentials ###
-src/main/resources/application.properties
+!.env.example

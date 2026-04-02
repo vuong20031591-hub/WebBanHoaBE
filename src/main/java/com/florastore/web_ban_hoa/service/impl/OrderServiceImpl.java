@@ -104,7 +104,7 @@ public class OrderServiceImpl implements OrderService {
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
             OrderItem orderItem = new OrderItem(
-                    savedOrder.getId(),
+                    savedOrder,
                     product.getId(),
                     product.getName(),
                     item.getQuantity(),
