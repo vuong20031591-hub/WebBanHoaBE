@@ -171,7 +171,36 @@ public class OrderServiceImpl implements OrderService {
             String search,
             Pageable pageable) {
 
-        Page<Order> orderPage = orderRepository.findByFilters(status, startDate, endDate, search, pageable);
+        Page<Order> orderPage;
+        boolean hasDateFilter = startDate != null || endDate != null;
+
+        if (hasDateFilter) {
+            LocalDateTime effectiveStart = startDate != null
+                    ? startDate
+                    : LocalDateTime.of(1970, 1, 1, 0, 0);
+            LocalDateTime effectiveEnd = endDate != null
+                    ? endDate
+                    : LocalDateTime.of(3000, 1, 1, 0, 0);
+
+            if (status != null) {
+                orderPage = orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        status,
+                        effectiveStart,
+                        effectiveEnd,
+                        pageable
+                );
+            } else {
+                orderPage = orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(
+                        effectiveStart,
+                        effectiveEnd,
+                        pageable
+                );
+            }
+        } else if (status != null) {
+            orderPage = orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+        } else {
+            orderPage = orderRepository.findAll(pageable);
+        }
 
         return PagedResponse.from(orderPage.map(OrderResponse::fromEntity));
     }
