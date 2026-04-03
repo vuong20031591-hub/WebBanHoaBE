@@ -7,6 +7,7 @@ import com.florastore.web_ban_hoa.entity.Product;
 import com.florastore.web_ban_hoa.repository.CategoryRepository;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
 import com.florastore.web_ban_hoa.service.AdminProductService;
+import com.florastore.web_ban_hoa.service.MediaUrlResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +19,16 @@ public class AdminProductServiceImpl implements AdminProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final MediaUrlResolver mediaUrlResolver;
 
-    public AdminProductServiceImpl(ProductRepository productRepository, CategoryRepository categoryRepository) {
+    public AdminProductServiceImpl(
+            ProductRepository productRepository,
+            CategoryRepository categoryRepository,
+            MediaUrlResolver mediaUrlResolver
+    ) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     @Override
@@ -31,7 +38,7 @@ public class AdminProductServiceImpl implements AdminProductService {
         Product product = new Product();
         applyUpsert(product, request, category);
 
-        return ProductDetailResponse.fromEntity(productRepository.save(product));
+        return toDetailResponse(productRepository.save(product));
     }
 
     @Override
@@ -41,7 +48,7 @@ public class AdminProductServiceImpl implements AdminProductService {
 
         applyUpsert(product, request, category);
 
-        return ProductDetailResponse.fromEntity(productRepository.save(product));
+        return toDetailResponse(productRepository.save(product));
     }
 
     @Override
@@ -54,14 +61,14 @@ public class AdminProductServiceImpl implements AdminProductService {
     public ProductDetailResponse restoreProduct(Long id) {
         Product product = getProductAnyByIdOrThrow(id);
         product.setDeletedAt(null);
-        return ProductDetailResponse.fromEntity(productRepository.save(product));
+        return toDetailResponse(productRepository.save(product));
     }
 
     @Override
     public ProductDetailResponse updateStock(Long id, Integer stockQuantity) {
         Product product = getProductAnyByIdOrThrow(id);
         product.setStockQuantity(stockQuantity);
-        return ProductDetailResponse.fromEntity(productRepository.save(product));
+        return toDetailResponse(productRepository.save(product));
     }
 
     private Product getProductAnyByIdOrThrow(Long id) {
@@ -81,5 +88,21 @@ public class AdminProductServiceImpl implements AdminProductService {
         product.setImage(request.image());
         product.setStockQuantity(request.stockQuantity());
         product.setCategory(category);
+    }
+
+    private ProductDetailResponse toDetailResponse(Product product) {
+        return new ProductDetailResponse(
+                product.getId(),
+                product.getName(),
+                product.getPrice(),
+                product.getDescription(),
+                mediaUrlResolver.resolveProductImage(product.getImage()),
+                product.getStockQuantity(),
+                product.getCreatedAt(),
+                product.getUpdatedAt(),
+                product.getDeletedAt(),
+                product.getCategory().getId(),
+                product.getCategory().getName()
+        );
     }
 }
