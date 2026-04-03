@@ -4,9 +4,11 @@ import com.florastore.web_ban_hoa.dto.PaymentCheckoutResponse;
 import com.florastore.web_ban_hoa.dto.PaymentReconciliationResponse;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookRequest;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookResult;
+import com.florastore.web_ban_hoa.dto.SePayWebhookRequest;
 import com.florastore.web_ban_hoa.security.JwtSubjectResolver;
 import com.florastore.web_ban_hoa.service.PaymentService;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,11 +58,40 @@ public class PaymentController {
 
     @PostMapping("/sepay/webhook")
     public ResponseEntity<PaymentWebhookResult> handleSePayWebhook(
-            @Valid @RequestBody PaymentWebhookRequest request,
-            @RequestHeader(name = "X-Signature", required = false) String signature,
-            @RequestHeader(name = "X-Sepay-Secret", required = false) String webhookSecret
+            @Valid @RequestBody SePayWebhookRequest request,
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader,
+            @RequestHeader(name = "X-Sepay-Secret", required = false) String webhookSecret,
+            @RequestHeader(name = "X-Forwarded-For", required = false) String forwardedFor,
+            @RequestHeader(name = "CF-Connecting-IP", required = false) String cfConnectingIp,
+            @RequestHeader(name = "X-Real-IP", required = false) String realIp,
+            HttpServletRequest servletRequest
     ) {
-        return ResponseEntity.ok(paymentService.handleSePayWebhook(request, signature, webhookSecret));
+        return ResponseEntity.ok(
+                paymentService.handleSePayWebhook(
+                        request,
+                        authorizationHeader,
+                        webhookSecret,
+                        extractClientIp(forwardedFor, cfConnectingIp, realIp, servletRequest)
+                )
+        );
+    }
+
+    private String extractClientIp(
+            String forwardedFor,
+            String cfConnectingIp,
+            String realIp,
+            HttpServletRequest servletRequest
+    ) {
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        if (cfConnectingIp != null && !cfConnectingIp.isBlank()) {
+            return cfConnectingIp.trim();
+        }
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return servletRequest.getRemoteAddr();
     }
 
     @GetMapping("/orders/{orderId}/reconcile")

@@ -11,6 +11,11 @@ import java.util.Optional;
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, Long> {
     Optional<PaymentTransaction> findByPaymentMethodAndProviderTransactionId(PaymentMethod paymentMethod, String providerTransactionId);
 
+    Optional<PaymentTransaction> findFirstByProviderTransactionIdAndStatusOrderByCreatedAtDesc(
+            String providerTransactionId,
+            PaymentTransactionStatus status
+    );
+
     List<PaymentTransaction> findByOrderId(Long orderId);
 
     List<PaymentTransaction> findByOrderIdOrderByCreatedAtDesc(Long orderId);

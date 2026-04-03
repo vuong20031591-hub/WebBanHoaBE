@@ -28,13 +28,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE " +
            "(:status IS NULL OR o.status = :status) AND " +
            "(:startDate IS NULL OR o.createdAt >= :startDate) AND " +
-           "(:endDate IS NULL OR o.createdAt <= :endDate) AND " +
-           "(:search IS NULL OR LOWER(o.userId) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(:endDate IS NULL OR o.createdAt <= :endDate)")
     Page<Order> findByFilters(
             @Param("status") OrderStatus status,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
-            @Param("search") String search,
             Pageable pageable
     );
 
