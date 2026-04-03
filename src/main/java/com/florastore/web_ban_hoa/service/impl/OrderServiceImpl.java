@@ -6,6 +6,7 @@ import com.florastore.web_ban_hoa.repository.CartRepository;
 import com.florastore.web_ban_hoa.repository.OrderItemRepository;
 import com.florastore.web_ban_hoa.repository.OrderRepository;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
+import com.florastore.web_ban_hoa.repository.UserRepository;
 import com.florastore.web_ban_hoa.service.CartService;
 import com.florastore.web_ban_hoa.service.OrderService;
 import org.springframework.data.domain.Page;
@@ -28,18 +29,64 @@ public class OrderServiceImpl implements OrderService {
     private final CartService cartService;
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
+    private final UserRepository userRepository;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
             CartRepository cartRepository,
             CartService cartService,
             OrderItemRepository orderItemRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            UserRepository userRepository) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
         this.cartService = cartService;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    public OrderResponse createAdminOrder(AdminCreateOrderRequest request) {
+        User user = userRepository.findByEmail(request.customerEmail().trim())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        Order order = new Order(String.valueOf(user.getId()), BigDecimal.ZERO, request.paymentMethod());
+        Order savedOrder = orderRepository.save(order);
+
+        for (AdminCreateOrderItemRequest itemRequest : request.items()) {
+            Product product = productRepository.findById(itemRequest.productId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product not found"));
+
+            Integer stockQuantity = product.getStockQuantity();
+            if (stockQuantity == null || itemRequest.quantity() > stockQuantity) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Insufficient stock for product id " + product.getId()
+                );
+            }
+
+            OrderItem orderItem = new OrderItem(
+                    savedOrder,
+                    product.getId(),
+                    product.getName(),
+                    itemRequest.quantity(),
+                    product.getPrice()
+            );
+            orderItemRepository.save(orderItem);
+
+            product.setStockQuantity(product.getStockQuantity() - itemRequest.quantity());
+            productRepository.save(product);
+
+            totalAmount = totalAmount.add(
+                    product.getPrice().multiply(BigDecimal.valueOf(itemRequest.quantity()))
+            );
+        }
+
+        savedOrder.setTotalAmount(totalAmount);
+        Order finalOrder = orderRepository.save(savedOrder);
+        return OrderResponse.fromEntity(finalOrder);
     }
 
     @Override

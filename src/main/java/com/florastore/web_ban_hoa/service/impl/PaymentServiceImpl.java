@@ -208,11 +208,20 @@ public class PaymentServiceImpl implements PaymentService {
         syncBankTransferIfPossible(order);
 
         List<PaymentTransaction> transactions = paymentTransactionRepository.findByOrderId(orderId);
+        boolean paid = transactions.stream().anyMatch(tx -> tx.getStatus() == PaymentTransactionStatus.SUCCESS);
+
+        if (paid && order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.CONFIRMED);
+            if (order.getConfirmedAt() == null) {
+                order.setConfirmedAt(LocalDateTime.now());
+            }
+            order = orderRepository.save(order);
+        }
+
         List<String> txSummary = transactions.stream()
                 .map(tx -> tx.getPaymentMethod().name() + ":" + tx.getProviderTransactionId() + ":" + tx.getStatus().name())
                 .toList();
 
-        boolean paid = transactions.stream().anyMatch(tx -> tx.getStatus() == PaymentTransactionStatus.SUCCESS);
         return new PaymentReconciliationResponse(order.getId(), order.getStatus().name(), transactions.size(), paid, txSummary);
     }
 
@@ -343,6 +352,13 @@ public class PaymentServiceImpl implements PaymentService {
         boolean hasSuccessfulTransaction = paymentTransactionRepository.findByOrderId(order.getId()).stream()
                 .anyMatch(tx -> tx.getStatus() == PaymentTransactionStatus.SUCCESS);
         if (hasSuccessfulTransaction) {
+            if (order.getStatus() == OrderStatus.PENDING) {
+                order.setStatus(OrderStatus.CONFIRMED);
+                if (order.getConfirmedAt() == null) {
+                    order.setConfirmedAt(LocalDateTime.now());
+                }
+                orderRepository.save(order);
+            }
             return;
         }
 
@@ -433,8 +449,8 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private boolean matchesPaymentCode(SePayTransactionItem tx, String transferCode) {
-        if (!isBlank(tx.code())) {
-            return tx.code().equalsIgnoreCase(transferCode);
+        if (!isBlank(tx.code()) && tx.code().equalsIgnoreCase(transferCode)) {
+            return true;
         }
 
         return containsPaymentCodeToken(tx.transactionContent(), transferCode)
