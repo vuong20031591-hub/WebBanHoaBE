@@ -64,14 +64,25 @@ public class AuthService {
 
     @Transactional
     public LoginResponse loginWithSupabaseProfile(SupabaseUserProfile profile) {
-        User user = userRepository.findByEmail(profile.email())
-                .orElseGet(() -> userRepository.save(new User(
+        User user = userRepository.findByEmail(profile.email()).orElse(null);
+        
+        if (user == null) {
+            try {
+                user = userRepository.save(new User(
                         profile.email(),
                         passwordEncoder.encode("oauth-google-user"),
                         normalizeFullName(profile.fullName(), profile.email()),
                         normalizePhone(profile.phone()),
                         Role.USER
-                )));
+                ));
+            } catch (Exception ex) {
+                user = userRepository.findByEmail(profile.email())
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.INTERNAL_SERVER_ERROR,
+                                "Failed to create or retrieve user"
+                        ));
+            }
+        }
 
         boolean changed = false;
         String nextName = normalizeFullName(profile.fullName(), profile.email());

@@ -1,6 +1,7 @@
 package com.florastore.web_ban_hoa.controller;
 
 import com.florastore.web_ban_hoa.dto.AdminOrderStatsResponse;
+import com.florastore.web_ban_hoa.dto.AdminCreateOrderRequest;
 import com.florastore.web_ban_hoa.dto.OrderResponse;
 import com.florastore.web_ban_hoa.dto.PagedResponse;
 import com.florastore.web_ban_hoa.dto.UpdateOrderStatusRequest;
@@ -27,6 +28,15 @@ public class AdminOrderController {
     public AdminOrderController(OrderService orderService, AdminRoleGuard adminRoleGuard) {
         this.orderService = orderService;
         this.adminRoleGuard = adminRoleGuard;
+    }
+
+    @PostMapping
+    public ResponseEntity<OrderResponse> createOrder(
+            @RequestHeader(name = "X-Role", required = false) String role,
+            @Valid @RequestBody AdminCreateOrderRequest request
+    ) {
+        adminRoleGuard.assertAdmin(role);
+        return ResponseEntity.ok(orderService.createAdminOrder(request));
     }
 
     @GetMapping

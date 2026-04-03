@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface OrderService {
+    OrderResponse createAdminOrder(AdminCreateOrderRequest request);
+
     OrderResponse createOrder(String userId, CreateOrderRequest request);
 
     OrderResponse createOrderFromCart(String userId, CreateOrderFromCartRequest request);
