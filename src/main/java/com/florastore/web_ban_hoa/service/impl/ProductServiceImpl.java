@@ -5,6 +5,7 @@ import com.florastore.web_ban_hoa.entity.Product;
 import com.florastore.web_ban_hoa.dto.ProductDTO;
 import com.florastore.web_ban_hoa.dto.ProductDetailResponse;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
+import com.florastore.web_ban_hoa.service.MediaUrlResolver;
 import com.florastore.web_ban_hoa.service.ProductService;
 import com.florastore.web_ban_hoa.specification.ProductSpecification;
 import org.springframework.data.domain.Page;
@@ -20,9 +21,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final MediaUrlResolver mediaUrlResolver;
 
-    public ProductServiceImpl(ProductRepository productRepository) {
+    public ProductServiceImpl(ProductRepository productRepository, MediaUrlResolver mediaUrlResolver) {
         this.productRepository = productRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     @Override
@@ -40,7 +43,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
 
-        return ProductDetailResponse.fromEntity(product);
+        return toDetailResponse(product);
     }
 
     private ProductDTO toDto(Product product) {
@@ -52,9 +55,25 @@ public class ProductServiceImpl implements ProductService {
                 product.getName(),
                 product.getPrice(),
                 product.getDescription(),
-                product.getImage(),
+                mediaUrlResolver.resolveProductImage(product.getImage()),
                 product.getStockQuantity(),
                 categoryName
+        );
+    }
+
+    private ProductDetailResponse toDetailResponse(Product product) {
+        return new ProductDetailResponse(
+                product.getId(),
+                product.getName(),
+                product.getPrice(),
+                product.getDescription(),
+                mediaUrlResolver.resolveProductImage(product.getImage()),
+                product.getStockQuantity(),
+                product.getCreatedAt(),
+                product.getUpdatedAt(),
+                product.getDeletedAt(),
+                product.getCategory().getId(),
+                product.getCategory().getName()
         );
     }
 }
