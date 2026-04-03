@@ -5,6 +5,7 @@ import com.florastore.web_ban_hoa.dto.OrderResponse;
 import com.florastore.web_ban_hoa.dto.PaymentCheckoutResponse;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookRequest;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookResult;
+import com.florastore.web_ban_hoa.dto.SePayWebhookRequest;
 import com.florastore.web_ban_hoa.entity.PaymentMethod;
 import com.florastore.web_ban_hoa.entity.Product;
 import com.florastore.web_ban_hoa.repository.ProductRepository;
@@ -29,7 +30,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = {
         "payments.vietqr.signing-secret=test-sign",
-        "payments.vietqr.webhook-secret=test-secret"
+        "payments.vietqr.webhook-secret=test-secret",
+        "payments.sepay.webhook-secret=test-sepay-secret",
+        "payments.webhook.ip-whitelist=127.0.0.1,172.236.138.20"
 })
 @ActiveProfiles("dev")
 class PaymentServiceIntegrationTest {
@@ -134,6 +137,75 @@ class PaymentServiceIntegrationTest {
 
         assertThat(checkout.transactionId()).startsWith("QRD");
         assertThat(paymentService.reconcileOrderPayments(userId, order.id()).paid()).isFalse();
+    }
+
+    @Test
+    void sePayWebhook_shouldConfirmPendingVietQrOrderUsingRealPayload() {
+        String userId = "sepay-webhook-user-" + UUID.randomUUID();
+        seedCart(userId, 1);
+
+        OrderResponse order = orderService.createOrder(userId, new CreateOrderRequest(PaymentMethod.VIETQR));
+        PaymentCheckoutResponse checkout = paymentService.generateVietQrCheckout(userId, order.id());
+
+        SePayWebhookRequest webhook = new SePayWebhookRequest(
+                92704L,
+                "MB Bank",
+                "2026-04-03 15:05:00",
+                "0327207918",
+                checkout.transactionId(),
+                "thanh toan " + checkout.transactionId(),
+                "in",
+                new BigDecimal("350000"),
+                null,
+                null,
+                "MBVCB.3278907687",
+                "Auto matched payment"
+        );
+
+        PaymentWebhookResult result = paymentService.handleSePayWebhook(
+                webhook,
+                "Apikey test-sepay-secret",
+                null,
+                "172.236.138.20"
+        );
+
+        assertThat(result.status()).isEqualTo("OK");
+        assertThat(result.orderId()).isEqualTo(order.id());
+        assertThat(paymentService.reconcileOrderPayments(userId, order.id()).paid()).isTrue();
+        assertThat(paymentService.reconcileOrderPayments(userId, order.id()).orderStatus()).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    void sePayWebhook_shouldRejectUnexpectedIp() {
+        String userId = "sepay-ip-user-" + UUID.randomUUID();
+        seedCart(userId, 1);
+
+        OrderResponse order = orderService.createOrder(userId, new CreateOrderRequest(PaymentMethod.VIETQR));
+        PaymentCheckoutResponse checkout = paymentService.generateVietQrCheckout(userId, order.id());
+
+        SePayWebhookRequest webhook = new SePayWebhookRequest(
+                92705L,
+                "MB Bank",
+                "2026-04-03 15:10:00",
+                "0327207918",
+                checkout.transactionId(),
+                checkout.transactionId(),
+                "in",
+                new BigDecimal("350000"),
+                null,
+                null,
+                "MBVCB.3278907688",
+                "Auto matched payment"
+        );
+
+        assertThatThrownBy(() -> paymentService.handleSePayWebhook(
+                webhook,
+                "Apikey test-sepay-secret",
+                null,
+                "8.8.8.8"
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Webhook IP is not allowed");
     }
 
     private void seedCart(String userId, int quantity) {
