@@ -5,6 +5,7 @@ import com.florastore.web_ban_hoa.dto.PaymentCheckoutResponse;
 import com.florastore.web_ban_hoa.dto.PaymentReconciliationResponse;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookRequest;
 import com.florastore.web_ban_hoa.dto.PaymentWebhookResult;
+import com.florastore.web_ban_hoa.dto.SePayWebhookRequest;
 import com.florastore.web_ban_hoa.entity.Order;
 import com.florastore.web_ban_hoa.entity.OrderStatus;
 import com.florastore.web_ban_hoa.entity.PaymentMethod;
@@ -33,9 +34,13 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional
@@ -45,6 +50,7 @@ public class PaymentServiceImpl implements PaymentService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final char[] RANDOM_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Pattern PAYMENT_CODE_PATTERN = Pattern.compile("(?i)(?<![A-Z0-9])(QRD[A-Z0-9]{7,})(?![A-Z0-9])");
 
     private final OrderRepository orderRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
@@ -69,6 +75,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final int qrExpiryMinutes;
     private final BigDecimal paymentAmountTolerance;
+    private final Set<String> webhookIpWhitelist;
 
     public PaymentServiceImpl(
             OrderRepository orderRepository,
@@ -88,7 +95,8 @@ public class PaymentServiceImpl implements PaymentService {
             @Value("${payments.bank.name:}") String bankName,
             @Value("${payments.bank.bin:}") String bankBin,
             @Value("${payments.qr.expiry-minutes:15}") int qrExpiryMinutes,
-            @Value("${payments.amount-tolerance:1000}") BigDecimal paymentAmountTolerance
+            @Value("${payments.amount-tolerance:0}") BigDecimal paymentAmountTolerance,
+            @Value("${payments.webhook.ip-whitelist:}") String webhookIpWhitelist
     ) {
         this.orderRepository = orderRepository;
         this.paymentTransactionRepository = paymentTransactionRepository;
@@ -109,10 +117,10 @@ public class PaymentServiceImpl implements PaymentService {
         this.bankBin = bankBin;
         this.qrExpiryMinutes = qrExpiryMinutes;
         this.paymentAmountTolerance = paymentAmountTolerance != null ? paymentAmountTolerance.abs() : BigDecimal.ZERO;
+        this.webhookIpWhitelist = parseIpWhitelist(webhookIpWhitelist);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public PaymentCheckoutResponse generateVietQrCheckout(String userId, Long orderId) {
         Order order = getOwnedOrderOrThrow(userId, orderId);
         validateCheckoutOrder(order, PaymentMethod.VIETQR);
@@ -120,7 +128,6 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public PaymentCheckoutResponse generateSePayCheckout(String userId, Long orderId) {
         Order order = getOwnedOrderOrThrow(userId, orderId);
         validateCheckoutOrder(order, PaymentMethod.SEPAY);
@@ -141,20 +148,58 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public PaymentWebhookResult handleSePayWebhook(PaymentWebhookRequest request, String headerSignature, String headerSecret) {
+    public PaymentWebhookResult handleSePayWebhook(
+            SePayWebhookRequest request,
+            String authorizationHeader,
+            String legacyWebhookSecret,
+            String clientIp
+    ) {
         log.info(
-                "[SEPAY WEBHOOK] orderId={} providerTransactionId={} amount={}",
-                request.orderId(),
-                request.providerTransactionId(),
-                request.amount()
+                "[SEPAY WEBHOOK] id={} accountNumber={} amount={} code={} clientIp={}",
+                request.id(),
+                request.accountNumber(),
+                request.transferAmount(),
+                request.code(),
+                clientIp
         );
-        validateSignature(request, headerSignature, sepaySigningSecret);
-        if (headerSecret != null && !headerSecret.isBlank()) {
-            validateHeaderSecret(headerSecret, sepayWebhookSecret);
-        } else {
-            validateHeaderSecret(request.secret(), sepayWebhookSecret);
+        validateWebhookIp(clientIp);
+        validateSePayAuthorization(authorizationHeader, legacyWebhookSecret);
+
+        if (!"in".equalsIgnoreCase(request.transferType())) {
+            return new PaymentWebhookResult("IGNORED", "Outbound transaction ignored", null, String.valueOf(request.id()));
         }
-        return processWebhook(PaymentMethod.SEPAY, request);
+
+        String expectedAccount = firstNonBlank(bankAccountExpected, bankAccountNumber);
+        if (!isBlank(expectedAccount) && !expectedAccount.equals(request.accountNumber())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook account number does not match configured bank account");
+        }
+
+        String paymentCode = extractPaymentCode(request.code(), request.content(), request.description(), request.referenceCode());
+        if (isBlank(paymentCode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment code not found in SePay webhook");
+        }
+
+        PaymentTransaction pendingTransaction = paymentTransactionRepository
+                .findFirstByProviderTransactionIdAndStatusOrderByCreatedAtDesc(paymentCode, PaymentTransactionStatus.PENDING)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pending payment transaction not found"));
+
+        Order order = pendingTransaction.getOrder();
+        if (order.getStatus() != OrderStatus.PENDING) {
+            return new PaymentWebhookResult("IGNORED", "Order already processed", order.getId(), String.valueOf(request.id()));
+        }
+        if (pendingTransaction.getPaymentMethod() == PaymentMethod.COD) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COD order cannot be confirmed by SePay webhook");
+        }
+        if (isExpired(pendingTransaction)) {
+            pendingTransaction.setStatus(PaymentTransactionStatus.FAILED);
+            paymentTransactionRepository.save(pendingTransaction);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "QR code expired");
+        }
+        if (!isInboundAmountMatch(order.getTotalAmount(), request.transferAmount())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook amount does not match order amount");
+        }
+
+        return markPaymentAsSuccess(order, pendingTransaction, request.transferAmount(), String.valueOf(request.id()), "Webhook processed");
     }
 
     @Override
@@ -317,13 +362,7 @@ public class PaymentServiceImpl implements PaymentService {
             return;
         }
 
-        pendingTransaction.setStatus(PaymentTransactionStatus.SUCCESS);
-        pendingTransaction.setAmount(matched.amount());
-        paymentTransactionRepository.saveAndFlush(pendingTransaction);
-
-        order.setStatus(OrderStatus.CONFIRMED);
-        order.setConfirmedAt(LocalDateTime.now());
-        orderRepository.save(order);
+        markPaymentAsSuccess(order, pendingTransaction, matched.amount(), matched.referenceId(), "Payment reconciled");
     }
 
     private SePayTransaction findMatchingSePayTransaction(Order order, PaymentTransaction pendingTransaction) {
@@ -337,50 +376,96 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         String minDate = order.getCreatedAt().toLocalDate().minusDays(1).format(DATE_FORMATTER);
-        String url = sepayApiBaseUrl
-                + "/transactions/list?limit=50&transaction_date_min="
-                + UriUtils.encodeQueryParam(minDate, StandardCharsets.UTF_8);
+        String maxDate = LocalDate.now().plusDays(1).format(DATE_FORMATTER);
 
         try {
-            SePayTransactionsResponse response = restClient.get()
-                    .uri(url)
-                    .header("Authorization", "Bearer " + sepayApiToken)
-                    .retrieve()
-                    .body(SePayTransactionsResponse.class);
+            String pendingCode = pendingTransaction.getProviderTransactionId().toLowerCase(Locale.ROOT);
+            int page = 1;
+            int limit = 100;
 
-            if (response == null || response.transactions() == null) {
-                return null;
+            while (page <= 10) {
+                String url = sepayApiBaseUrl
+                        + "/transactions/list?limit=" + limit
+                        + "&page=" + page
+                        + "&account_number=" + UriUtils.encodeQueryParam(expectedAccount, StandardCharsets.UTF_8)
+                        + "&amount_in=" + UriUtils.encodeQueryParam(order.getTotalAmount().stripTrailingZeros().toPlainString(), StandardCharsets.UTF_8)
+                        + "&transaction_date_min=" + UriUtils.encodeQueryParam(minDate, StandardCharsets.UTF_8)
+                        + "&transaction_date_max=" + UriUtils.encodeQueryParam(maxDate, StandardCharsets.UTF_8);
+
+                SePayTransactionsResponse response = restClient.get()
+                        .uri(url)
+                        .header("Authorization", "Bearer " + sepayApiToken)
+                        .retrieve()
+                        .body(SePayTransactionsResponse.class);
+
+                List<SePayTransactionItem> transactions = extractTransactions(response);
+                if (transactions.isEmpty()) {
+                    return null;
+                }
+
+                SePayTransaction matched = transactions.stream()
+                        .filter(tx -> expectedAccount.equals(tx.accountNumber()))
+                        .filter(tx -> isInboundAmountMatch(order.getTotalAmount(), tx.amountIn()))
+                        .filter(tx -> matchesPaymentCode(tx, pendingCode))
+                        .findFirst()
+                        .map(tx -> new SePayTransaction(
+                                tx.id() != null ? tx.id() : firstNonBlank(tx.referenceNumber(), pendingTransaction.getProviderTransactionId()),
+                                parseAmount(tx.amountIn())
+                        ))
+                        .orElse(null);
+
+                if (matched != null) {
+                    return matched;
+                }
+
+                if (!hasMorePages(response, page, limit, transactions.size())) {
+                    return null;
+                }
+
+                page++;
             }
 
-            String pendingCode = pendingTransaction.getProviderTransactionId().toLowerCase(Locale.ROOT);
-            return response.transactions().stream()
-                    .filter(tx -> expectedAccount.equals(tx.accountNumber()))
-                    .filter(tx -> isInboundAmountMatch(order.getTotalAmount(), tx.amountIn()))
-                    .filter(tx -> containsTransferCode(tx, pendingCode))
-                    .findFirst()
-                    .map(tx -> new SePayTransaction(
-                            tx.id() != null ? tx.id() : firstNonBlank(tx.referenceNumber(), pendingTransaction.getProviderTransactionId()),
-                            parseAmount(tx.amountIn())
-                    ))
-                    .orElse(null);
+            return null;
         } catch (Exception ex) {
             log.warn("SePay transaction sync skipped: {}", ex.getMessage());
             return null;
         }
     }
 
-    private boolean containsTransferCode(SePayTransactionItem tx, String transferCode) {
-        return containsIgnoreCase(tx.code(), transferCode)
-                || containsIgnoreCase(tx.transactionContent(), transferCode)
-                || containsIgnoreCase(tx.referenceNumber(), transferCode);
+    private boolean matchesPaymentCode(SePayTransactionItem tx, String transferCode) {
+        if (!isBlank(tx.code())) {
+            return tx.code().equalsIgnoreCase(transferCode);
+        }
+
+        return containsPaymentCodeToken(tx.transactionContent(), transferCode)
+                || containsPaymentCodeToken(tx.referenceNumber(), transferCode)
+                || containsPaymentCodeToken(tx.description(), transferCode);
     }
 
     private boolean containsIgnoreCase(String value, String expected) {
         return value != null && expected != null && value.toLowerCase(Locale.ROOT).contains(expected);
     }
 
+    private boolean containsPaymentCodeToken(String value, String expectedCode) {
+        if (isBlank(value) || isBlank(expectedCode)) {
+            return false;
+        }
+
+        Matcher matcher = PAYMENT_CODE_PATTERN.matcher(value.toUpperCase(Locale.ROOT));
+        while (matcher.find()) {
+            if (expectedCode.equalsIgnoreCase(matcher.group(1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isInboundAmountMatch(BigDecimal orderAmount, String amountIn) {
         BigDecimal received = parseAmount(amountIn);
+        return isInboundAmountMatch(orderAmount, received);
+    }
+
+    private boolean isInboundAmountMatch(BigDecimal orderAmount, BigDecimal received) {
         if (received == null) {
             return false;
         }
@@ -441,6 +526,88 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         return new PaymentWebhookResult("OK", "Webhook processed", order.getId(), request.providerTransactionId());
+    }
+
+    private PaymentWebhookResult markPaymentAsSuccess(
+            Order order,
+            PaymentTransaction pendingTransaction,
+            BigDecimal amount,
+            String providerReference,
+            String successMessage
+    ) {
+        pendingTransaction.setStatus(PaymentTransactionStatus.SUCCESS);
+        pendingTransaction.setAmount(amount);
+        try {
+            paymentTransactionRepository.saveAndFlush(pendingTransaction);
+        } catch (DataIntegrityViolationException ex) {
+            return new PaymentWebhookResult("IGNORED", "Transaction already processed", order.getId(), providerReference);
+        }
+
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.CONFIRMED);
+            order.setConfirmedAt(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+
+        return new PaymentWebhookResult("OK", successMessage, order.getId(), providerReference);
+    }
+
+    private void validateWebhookIp(String clientIp) {
+        if (webhookIpWhitelist.isEmpty()) {
+            return;
+        }
+
+        String normalizedIp = normalizeIp(clientIp);
+        if (normalizedIp == null || !webhookIpWhitelist.contains(normalizedIp)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Webhook IP is not allowed");
+        }
+    }
+
+    private void validateSePayAuthorization(String authorizationHeader, String legacyWebhookSecret) {
+        if (!isBlank(sepayWebhookSecret)) {
+            String expectedHeader = "apikey " + sepayWebhookSecret.trim().toLowerCase(Locale.ROOT);
+            if (!isBlank(authorizationHeader) && authorizationHeader.trim().toLowerCase(Locale.ROOT).equals(expectedHeader)) {
+                return;
+            }
+
+            if (!isBlank(legacyWebhookSecret) && legacyWebhookSecret.trim().equals(sepayWebhookSecret.trim())) {
+                return;
+            }
+
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid SePay webhook authorization");
+        }
+
+        if (isBlank(authorizationHeader) && isBlank(legacyWebhookSecret)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "SePay webhook authorization is not configured");
+        }
+    }
+
+    private String extractPaymentCode(String... values) {
+        for (String value : values) {
+            String exactCode = normalizePaymentCode(value);
+            if (exactCode != null) {
+                return exactCode;
+            }
+
+            if (isBlank(value)) {
+                continue;
+            }
+
+            Matcher matcher = PAYMENT_CODE_PATTERN.matcher(value.toUpperCase(Locale.ROOT));
+            if (matcher.find()) {
+                return matcher.group(1).toUpperCase(Locale.ROOT);
+            }
+        }
+        return null;
+    }
+
+    private String normalizePaymentCode(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return normalized.matches("^QRD[A-Z0-9]{7,}$") ? normalized : null;
     }
 
     private void validateHeaderSecret(String provided, String configured) {
@@ -568,6 +735,49 @@ public class PaymentServiceImpl implements PaymentService {
         return "";
     }
 
+    private Set<String> parseIpWhitelist(String whitelist) {
+        if (isBlank(whitelist)) {
+            return Set.of();
+        }
+
+        return Arrays.stream(whitelist.split(","))
+                .map(this::normalizeIp)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    private String normalizeIp(String ip) {
+        if (isBlank(ip)) {
+            return null;
+        }
+
+        String normalized = ip.trim();
+        if (normalized.startsWith("::ffff:")) {
+            normalized = normalized.substring("::ffff:".length());
+        }
+        return normalized;
+    }
+
+    private List<SePayTransactionItem> extractTransactions(SePayTransactionsResponse response) {
+        if (response == null) {
+            return List.of();
+        }
+        if (response.transactions() != null) {
+            return response.transactions();
+        }
+        if (response.data() != null) {
+            return response.data();
+        }
+        return List.of();
+    }
+
+    private boolean hasMorePages(SePayTransactionsResponse response, int currentPage, int limit, int currentSize) {
+        if (response != null && response.meta() != null && response.meta().pagination() != null) {
+            return response.meta().pagination().lastPage() > currentPage;
+        }
+        return currentSize >= limit;
+    }
+
     private record GeneratedQr(String checkoutUrl, String qrContent, String note) {
     }
 
@@ -588,10 +798,28 @@ public class PaymentServiceImpl implements PaymentService {
     private record VietQrGenerateData(String qrCode, String qrDataURL, String qrLink) {
     }
 
-    private record SePayTransactionsResponse(Integer status, Object error, SePayMessages messages, List<SePayTransactionItem> transactions) {
+    private record SePayTransactionsResponse(
+            Object status,
+            Object error,
+            SePayMessages messages,
+            List<SePayTransactionItem> transactions,
+            List<SePayTransactionItem> data,
+            SePayMeta meta
+    ) {
     }
 
     private record SePayMessages(Boolean success) {
+    }
+
+    private record SePayMeta(SePayPagination pagination) {
+    }
+
+    private record SePayPagination(
+            @JsonProperty("total") Integer total,
+            @JsonProperty("per_page") Integer perPage,
+            @JsonProperty("current_page") Integer currentPage,
+            @JsonProperty("last_page") Integer lastPage
+    ) {
     }
 
     private record SePayTransactionItem(
@@ -606,7 +834,8 @@ public class PaymentServiceImpl implements PaymentService {
             @JsonProperty("reference_number") String referenceNumber,
             String code,
             @JsonProperty("sub_account") String subAccount,
-            @JsonProperty("bank_account_id") String bankAccountId
+            @JsonProperty("bank_account_id") String bankAccountId,
+            String description
     ) {
     }
 
