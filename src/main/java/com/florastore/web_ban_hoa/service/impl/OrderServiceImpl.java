@@ -9,6 +9,7 @@ import com.florastore.web_ban_hoa.repository.ProductRepository;
 import com.florastore.web_ban_hoa.repository.UserRepository;
 import com.florastore.web_ban_hoa.service.CartService;
 import com.florastore.web_ban_hoa.service.OrderService;
+import com.florastore.web_ban_hoa.service.RewardsService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final RewardsService rewardsService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -37,13 +39,15 @@ public class OrderServiceImpl implements OrderService {
             CartService cartService,
             OrderItemRepository orderItemRepository,
             ProductRepository productRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            RewardsService rewardsService) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
         this.cartService = cartService;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.rewardsService = rewardsService;
     }
 
     @Override
@@ -145,8 +149,19 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(product.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
         }
 
-        Order order = new Order(userId, totalAmount, request.paymentMethod());
+        Long userIdLong = parseUserId(userId);
+        int appliedRedeemPoints = rewardsService.getApplicableRedeemPoints(userIdLong, totalAmount, request.redeemPoints());
+        BigDecimal rewardsDiscountAmount = rewardsService.calculateDiscountForPoints(appliedRedeemPoints);
+        BigDecimal payableAmount = totalAmount.subtract(rewardsDiscountAmount).max(BigDecimal.ZERO);
+
+        Order order = new Order(userId, payableAmount, request.paymentMethod());
+        order.setRedeemedPoints(appliedRedeemPoints);
+        order.setRewardsDiscountAmount(rewardsDiscountAmount);
         Order savedOrder = orderRepository.save(order);
+
+        if (appliedRedeemPoints > 0) {
+            rewardsService.redeemExactPointsForOrder(userIdLong, appliedRedeemPoints, savedOrder.getId());
+        }
 
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
@@ -196,6 +211,11 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CONFIRMED);
         order.setConfirmedAt(LocalDateTime.now());
         Order savedOrder = orderRepository.save(order);
+        if (savedOrder.getStatus() == OrderStatus.CANCELLED) {
+            rollbackRewardsIfCancelled(savedOrder);
+        } else {
+            awardRewardsIfConfirmed(savedOrder);
+        }
 
         return OrderResponse.fromEntity(savedOrder);
     }
@@ -285,6 +305,11 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
+        if (savedOrder.getStatus() == OrderStatus.CANCELLED) {
+            rollbackRewardsIfCancelled(savedOrder);
+        } else {
+            awardRewardsIfConfirmed(savedOrder);
+        }
 
         return OrderResponse.fromEntity(savedOrder);
     }
@@ -309,5 +334,35 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findById(orderId)
                 .filter(order -> order.getUserId().equals(userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    }
+
+    private void awardRewardsIfConfirmed(Order order) {
+        if (order.getStatus() != OrderStatus.CONFIRMED) {
+            return;
+        }
+
+        rewardsService.awardPointsForOrder(parseUserId(order.getUserId()), order.getTotalAmount(), order.getId());
+    }
+
+    private void rollbackRewardsIfCancelled(Order order) {
+        if (order.getStatus() != OrderStatus.CANCELLED) {
+            return;
+        }
+
+        Long userId = parseUserId(order.getUserId());
+        rewardsService.rollbackRewardsForCancelledOrder(
+            userId,
+            order.getId(),
+            order.getRedeemedPoints(),
+            order.getTotalAmount()
+        );
+    }
+
+    private Long parseUserId(String userId) {
+        try {
+            return Long.parseLong(userId);
+        } catch (NumberFormatException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid user id for rewards processing");
+        }
     }
 }

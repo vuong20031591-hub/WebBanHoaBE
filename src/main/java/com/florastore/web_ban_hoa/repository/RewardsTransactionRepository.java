@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface RewardsTransactionRepository extends JpaRepository<RewardsTransaction, Long> {
     Page<RewardsTransaction> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+
+    boolean existsByUserIdAndTypeAndOrderId(Long userId, String type, Long orderId);
 }

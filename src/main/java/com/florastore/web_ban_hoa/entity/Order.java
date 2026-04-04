@@ -27,6 +27,12 @@ public class Order {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "redeemed_points", nullable = false)
+    private Integer redeemedPoints = 0;
+
+    @Column(name = "rewards_discount_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal rewardsDiscountAmount = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 32)
     private PaymentMethod paymentMethod;
@@ -52,6 +58,8 @@ public class Order {
         this.totalAmount = totalAmount;
         this.paymentMethod = paymentMethod;
         this.status = OrderStatus.PENDING;
+        this.redeemedPoints = 0;
+        this.rewardsDiscountAmount = BigDecimal.ZERO;
     }
 
     @PrePersist
