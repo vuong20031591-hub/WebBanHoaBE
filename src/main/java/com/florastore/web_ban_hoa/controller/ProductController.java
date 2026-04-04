@@ -41,4 +41,13 @@ public class ProductController {
         Page<ProductDTO> result = productService.search(name, minPrice, maxPrice, categoryId, pageable);
         return ResponseEntity.ok(PagedResponse.from(result));
     }
+
+    @GetMapping("/search/suggestions")
+    public ResponseEntity<PagedResponse<ProductDTO>> getSearchSuggestions(
+            @RequestParam String query,
+            @PageableDefault(page = 0, size = 5, sort = "name", direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        Page<ProductDTO> result = productService.search(query, null, null, null, pageable);
+        return ResponseEntity.ok(PagedResponse.from(result));
+    }
 }

@@ -16,11 +16,9 @@ public record CreateAddressRequest(
         @Size(max = 255, message = "Address must not exceed 255 characters")
         String address,
 
-        @NotBlank(message = "City is required")
         @Size(max = 100, message = "City must not exceed 100 characters")
         String city,
 
-        @NotBlank(message = "District is required")
         @Size(max = 100, message = "District must not exceed 100 characters")
         String district,
 
