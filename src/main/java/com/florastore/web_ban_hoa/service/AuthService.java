@@ -80,10 +80,14 @@ public class AuthService {
             changed = true;
         }
 
-        String nextPhone = normalizePhone(profile.phone());
-        if (nextPhone != null && !nextPhone.isBlank() && !nextPhone.equals(user.getPhone())) {
-            user.setPhone(nextPhone);
-            changed = true;
+        // Only update phone if user doesn't have a phone yet (is default value)
+        // Don't overwrite user's manually set phone number with Google profile data
+        if (user.getPhone() == null || user.getPhone().equals("0000000000")) {
+            String nextPhone = normalizePhone(profile.phone());
+            if (nextPhone != null && !nextPhone.isBlank() && !nextPhone.equals(user.getPhone())) {
+                user.setPhone(nextPhone);
+                changed = true;
+            }
         }
 
         if (changed) {

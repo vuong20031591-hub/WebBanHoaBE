@@ -19,6 +19,8 @@ public record UpdateAddressRequest(
         String district,
 
         @Size(max = 100, message = "Ward must not exceed 100 characters")
-        String ward
+        String ward,
+
+        Boolean isDefault
 ) {
 }
