@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
@@ -35,6 +36,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
     );
+
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items WHERE o.id IN :ids")
+    List<Order> findAllWithItemsByIdIn(@Param("ids") List<Long> ids);
 
     long countByStatus(OrderStatus status);
 }

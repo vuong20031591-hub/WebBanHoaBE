@@ -249,6 +249,13 @@ public class OrderServiceImpl implements OrderService {
             orderPage = orderRepository.findAll(pageable);
         }
 
+        // Fix N+1 query: fetch all items in one query
+        List<Order> orders = orderPage.getContent();
+        if (!orders.isEmpty()) {
+            List<Long> orderIds = orders.stream().map(Order::getId).toList();
+            orderRepository.findAllWithItemsByIdIn(orderIds);
+        }
+
         return PagedResponse.from(orderPage.map(OrderResponse::fromEntity));
     }
 
