@@ -14,6 +14,7 @@ import com.florastore.web_ban_hoa.entity.PaymentTransactionStatus;
 import com.florastore.web_ban_hoa.repository.OrderRepository;
 import com.florastore.web_ban_hoa.repository.PaymentTransactionRepository;
 import com.florastore.web_ban_hoa.service.PaymentService;
+import com.florastore.web_ban_hoa.service.RewardsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +55,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
+    private final RewardsService rewardsService;
     private final RestClient restClient;
 
     private final String vietqrApiBaseUrl;
@@ -80,6 +82,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentServiceImpl(
             OrderRepository orderRepository,
             PaymentTransactionRepository paymentTransactionRepository,
+            RewardsService rewardsService,
             @Value("${payments.vietqr.api-base-url:https://api.vietqr.io}") String vietqrApiBaseUrl,
             @Value("${payments.vietqr.client-id:}") String vietqrClientId,
             @Value("${payments.vietqr.api-key:}") String vietqrApiKey,
@@ -100,6 +103,7 @@ public class PaymentServiceImpl implements PaymentService {
     ) {
         this.orderRepository = orderRepository;
         this.paymentTransactionRepository = paymentTransactionRepository;
+        this.rewardsService = rewardsService;
         this.restClient = RestClient.builder().build();
         this.vietqrApiBaseUrl = trimTrailingSlash(vietqrApiBaseUrl);
         this.vietqrClientId = vietqrClientId;
@@ -216,6 +220,7 @@ public class PaymentServiceImpl implements PaymentService {
                 order.setConfirmedAt(LocalDateTime.now());
             }
             order = orderRepository.save(order);
+            awardRewardsForConfirmedOrder(order);
         }
 
         List<String> txSummary = transactions.stream()
@@ -538,7 +543,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setConfirmedAt(LocalDateTime.now());
-            orderRepository.save(order);
+            order = orderRepository.save(order);
+            awardRewardsForConfirmedOrder(order);
         }
 
         return new PaymentWebhookResult("OK", "Webhook processed", order.getId(), request.providerTransactionId());
@@ -562,7 +568,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setConfirmedAt(LocalDateTime.now());
-            orderRepository.save(order);
+            order = orderRepository.save(order);
+            awardRewardsForConfirmedOrder(order);
         }
 
         return new PaymentWebhookResult("OK", successMessage, order.getId(), providerReference);
@@ -749,6 +756,15 @@ public class PaymentServiceImpl implements PaymentService {
             }
         }
         return "";
+    }
+
+    private void awardRewardsForConfirmedOrder(Order order) {
+        try {
+            Long userId = Long.parseLong(order.getUserId());
+            rewardsService.awardPointsForOrder(userId, order.getTotalAmount(), order.getId());
+        } catch (NumberFormatException ex) {
+            log.warn("Skip rewards award for order {} because user id {} is not numeric", order.getId(), order.getUserId());
+        }
     }
 
     private Set<String> parseIpWhitelist(String whitelist) {

@@ -21,9 +21,6 @@ public record UpdateUserPreferencesRequest(
 
         Boolean signatureWrap,
 
-        Boolean ecoDelivery,
-
-        @Size(max = 20, message = "Ribbon color must not exceed 20 characters")
-        String ribbonColor
+        Boolean ecoDelivery
 ) {
 }
