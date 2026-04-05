@@ -46,6 +46,7 @@ public class AdminOrderController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(required = false) String userId,
+            @RequestParam(defaultValue = "false") boolean includeUserProfile,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -56,7 +57,16 @@ public class AdminOrderController {
         Sort.Direction direction = sortDir.equalsIgnoreCase("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        return ResponseEntity.ok(orderService.getOrdersWithFilters(status, startDate, endDate, userId, pageable));
+        return ResponseEntity.ok(
+                orderService.getOrdersWithFilters(
+                        status,
+                        startDate,
+                        endDate,
+                        userId,
+                        pageable,
+                        includeUserProfile
+                )
+        );
     }
 
     @PutMapping("/{id}/status")
