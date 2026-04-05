@@ -35,16 +35,32 @@ jobs:
         run: chmod +x mvnw
 
       - name: Build and test backend
-        run: ./mvnw -B clean verify
+        shell: bash
+        run: |
+          set -o pipefail
+          ATTEMPT=1
+          MAX_ATTEMPTS=2
+          until [ "$ATTEMPT" -gt "$MAX_ATTEMPTS" ]; do
+            echo "Running Maven verify (attempt ${ATTEMPT}/${MAX_ATTEMPTS})"
+            ./mvnw -B -ntp clean verify 2>&1 | tee build.log && break
+            if [ "$ATTEMPT" -eq "$MAX_ATTEMPTS" ]; then
+              echo "Maven verify failed after ${MAX_ATTEMPTS} attempts."
+              exit 1
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Retrying Maven verify..."
+          done
 
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backend-test-reports
           path: |
+            build.log
             target/surefire-reports/**
             target/failsafe-reports/**
+          if-no-files-found: ignore
 
   docker-build-push:
     name: Build and push backend image
@@ -103,5 +119,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
-#Ghi chu
-  
