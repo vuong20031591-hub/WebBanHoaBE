@@ -47,9 +47,6 @@ public class UserPreferencesService {
         if (request.ecoDelivery() != null) {
             prefs.setEcoDelivery(request.ecoDelivery());
         }
-        if (request.ribbonColor() != null && !request.ribbonColor().isBlank()) {
-            prefs.setRibbonColor(request.ribbonColor());
-        }
 
         UserPreferences saved = repository.save(prefs);
         return UserPreferencesResponse.from(saved);
