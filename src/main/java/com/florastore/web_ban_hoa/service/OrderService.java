@@ -27,7 +27,8 @@ public interface OrderService {
             LocalDateTime startDate,
             LocalDateTime endDate,
             String search,
-            Pageable pageable
+            Pageable pageable,
+            boolean includeUserProfile
     );
 
     OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus);

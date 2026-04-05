@@ -9,6 +9,8 @@ import java.util.List;
 public record OrderResponse(
         Long id,
         String userId,
+        String userFullName,
+        String userEmail,
         BigDecimal totalAmount,
         Integer redeemedPoints,
         BigDecimal rewardsDiscountAmount,
@@ -20,6 +22,10 @@ public record OrderResponse(
         LocalDateTime confirmedAt
 ) {
     public static OrderResponse fromEntity(Order order) {
+        return fromEntity(order, null, null);
+    }
+
+    public static OrderResponse fromEntity(Order order, String userFullName, String userEmail) {
         List<OrderItemResponse> items = order.getItems().stream()
                 .map(OrderItemResponse::from)
                 .toList();
@@ -27,6 +33,8 @@ public record OrderResponse(
         return new OrderResponse(
                 order.getId(),
                 order.getUserId(),
+                userFullName,
+                userEmail,
                 order.getTotalAmount(),
                 order.getRedeemedPoints(),
                 order.getRewardsDiscountAmount(),
