@@ -3,10 +3,10 @@ name: WebBanHoaBE CI-CD
 on:
   push:
     branches:
-      - main
+      - feat/test-deploy
   pull_request:
     branches:
-      - main
+      - feat/test-deploy
   workflow_dispatch:
 
 permissions:
