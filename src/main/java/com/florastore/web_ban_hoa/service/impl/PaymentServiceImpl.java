@@ -367,23 +367,51 @@ public class PaymentServiceImpl implements PaymentService {
             return;
         }
 
-        PaymentTransaction pendingTransaction = paymentTransactionRepository
-                .findFirstByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(order.getId(), order.getPaymentMethod(), PaymentTransactionStatus.PENDING)
-                .orElse(null);
-        if (pendingTransaction == null || isExpired(pendingTransaction)) {
-            if (pendingTransaction != null && pendingTransaction.getStatus() == PaymentTransactionStatus.PENDING) {
+        List<PaymentTransaction> pendingTransactions = paymentTransactionRepository
+                .findByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(
+                        order.getId(),
+                        order.getPaymentMethod(),
+                        PaymentTransactionStatus.PENDING
+                );
+
+        if (pendingTransactions.isEmpty()) {
+            return;
+        }
+
+        for (PaymentTransaction pendingTransaction : pendingTransactions) {
+            if (isExpired(pendingTransaction)) {
                 pendingTransaction.setStatus(PaymentTransactionStatus.FAILED);
                 paymentTransactionRepository.save(pendingTransaction);
+                continue;
             }
+
+            SePayTransaction matched = findMatchingSePayTransaction(order, pendingTransaction);
+            if (matched == null) {
+                continue;
+            }
+
+            markPaymentAsSuccess(order, pendingTransaction, matched.amount(), matched.referenceId(), "Payment reconciled");
+            failOtherPendingTransactions(order.getId(), order.getPaymentMethod(), pendingTransaction.getId());
             return;
         }
+    }
 
-        SePayTransaction matched = findMatchingSePayTransaction(order, pendingTransaction);
-        if (matched == null) {
-            return;
+    private void failOtherPendingTransactions(Long orderId, PaymentMethod paymentMethod, Long successfulTransactionId) {
+        List<PaymentTransaction> pendingTransactions = paymentTransactionRepository
+                .findByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(
+                        orderId,
+                        paymentMethod,
+                        PaymentTransactionStatus.PENDING
+                );
+
+        for (PaymentTransaction pendingTransaction : pendingTransactions) {
+            if (pendingTransaction.getId().equals(successfulTransactionId)) {
+                continue;
+            }
+
+            pendingTransaction.setStatus(PaymentTransactionStatus.FAILED);
+            paymentTransactionRepository.save(pendingTransaction);
         }
-
-        markPaymentAsSuccess(order, pendingTransaction, matched.amount(), matched.referenceId(), "Payment reconciled");
     }
 
     private SePayTransaction findMatchingSePayTransaction(Order order, PaymentTransaction pendingTransaction) {
@@ -689,6 +717,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PENDING order can start checkout");
+        }
+        if (order.getTotalAmount() == null || order.getTotalAmount().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order total is zero; no bank transfer is required");
         }
     }
 

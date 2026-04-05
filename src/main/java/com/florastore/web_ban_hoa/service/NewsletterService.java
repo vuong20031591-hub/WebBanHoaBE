@@ -23,7 +23,7 @@ public class NewsletterService {
     @Transactional
     public void subscribe(String email, String source) {
         activateSubscription(email, source);
-        
+
         try {
             emailService.sendZaloGroupInvitation(email);
         } catch (Exception e) {
@@ -35,7 +35,7 @@ public class NewsletterService {
     public void unsubscribe(String email) {
         NewsletterSubscriber subscriber = repository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Email not found"));
-        
+
         subscriber.setIsActive(false);
         subscriber.setUnsubscribedAt(LocalDateTime.now());
         repository.save(subscriber);
@@ -44,7 +44,10 @@ public class NewsletterService {
     @Transactional
     public void syncSubscriptionPreference(String email, boolean subscribe, String source) {
         if (subscribe) {
-            activateSubscription(email, source);
+            boolean subscribedNow = activateSubscription(email, source);
+            if (subscribedNow) {
+                emailService.sendNewsletterSubscriptionEmail(email);
+            }
             return;
         }
 
@@ -55,21 +58,23 @@ public class NewsletterService {
         });
     }
 
-    private void activateSubscription(String email, String source) {
+    private boolean activateSubscription(String email, String source) {
         var existing = repository.findByEmail(email);
 
         if (existing.isPresent()) {
             NewsletterSubscriber subscriber = existing.get();
+            boolean subscribedNow = !subscriber.getIsActive();
             if (!subscriber.getIsActive()) {
                 subscriber.setIsActive(true);
                 subscriber.setUnsubscribedAt(null);
             }
             subscriber.setSource(source);
             repository.save(subscriber);
-            return;
+            return subscribedNow;
         }
 
         NewsletterSubscriber subscriber = new NewsletterSubscriber(email, source);
         repository.save(subscriber);
+        return true;
     }
 }

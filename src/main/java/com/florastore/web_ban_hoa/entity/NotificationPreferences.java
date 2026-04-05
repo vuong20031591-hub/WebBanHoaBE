@@ -30,8 +30,14 @@ public class NotificationPreferences {
     @Column(name = "email_newsletter", nullable = false)
     private Boolean emailNewsletter = false;
 
+    @Column(name = "email_event_reminders", nullable = false)
+    private Boolean emailEventReminders = false;
+
     @Column(name = "sms_order_updates", nullable = false)
     private Boolean smsOrderUpdates = false;
+
+    @Column(name = "sms_event_reminders", nullable = false)
+    private Boolean smsEventReminders = false;
 
     @Column(name = "push_artist_updates", nullable = false)
     private Boolean pushArtistUpdates = false;
@@ -47,7 +53,9 @@ public class NotificationPreferences {
         this.emailOrderUpdates = true;
         this.emailPromotions = true;
         this.emailNewsletter = false;
+        this.emailEventReminders = false;
         this.smsOrderUpdates = false;
+        this.smsEventReminders = false;
         this.pushArtistUpdates = false;
     }
 

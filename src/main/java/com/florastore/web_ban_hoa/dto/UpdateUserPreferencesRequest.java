@@ -21,6 +21,8 @@ public record UpdateUserPreferencesRequest(
 
         Boolean signatureWrap,
 
-        Boolean ecoDelivery
+        Boolean ecoDelivery,
+
+        Boolean smsTwoFactorEnabled
 ) {
 }

@@ -47,7 +47,7 @@ public class OrderServiceImpl implements OrderService {
             OrderItemRepository orderItemRepository,
             ProductRepository productRepository,
             UserRepository userRepository,
-            OrderResponseMapper orderResponseMapper) {
+            OrderResponseMapper orderResponseMapper,
             RewardsService rewardsService) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
@@ -190,6 +190,13 @@ public class OrderServiceImpl implements OrderService {
             productRepository.save(product);
         }
 
+        if (payableAmount.signum() == 0) {
+            savedOrder.setStatus(OrderStatus.CONFIRMED);
+            savedOrder.setConfirmedAt(LocalDateTime.now());
+            savedOrder = orderRepository.save(savedOrder);
+            awardRewardsIfConfirmed(savedOrder);
+        }
+
         cartService.clearCart(userId);
 
         return orderResponseMapper.toResponse(savedOrder);
@@ -216,6 +223,9 @@ public class OrderServiceImpl implements OrderService {
         Order order = getOwnedOrderOrThrow(userId, orderId);
         if (order.getPaymentMethod() != PaymentMethod.COD) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order payment method is not COD");
+        }
+        if (order.getStatus() == OrderStatus.CONFIRMED) {
+            return OrderResponse.fromEntity(order);
         }
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PENDING order can be confirmed");
@@ -407,6 +417,36 @@ public class OrderServiceImpl implements OrderService {
             // Some legacy records may contain non-numeric userId values.
             return null;
         }
+    }
+
+    private void awardRewardsIfConfirmed(Order order) {
+        if (order.getStatus() != OrderStatus.CONFIRMED) {
+            return;
+        }
+
+        rewardsService.awardPointsForOrder(parseUserId(order.getUserId()), order.getTotalAmount(), order.getId());
+    }
+
+    private void rollbackRewardsIfCancelled(Order order) {
+        if (order.getStatus() != OrderStatus.CANCELLED) {
+            return;
+        }
+
+        Long userId = parseUserId(order.getUserId());
+        rewardsService.rollbackRewardsForCancelledOrder(
+                userId,
+                order.getId(),
+                order.getRedeemedPoints(),
+                order.getTotalAmount()
+        );
+    }
+
+    private Long parseUserId(String userId) {
+        Long parsedUserId = parseNumericUserId(userId);
+        if (parsedUserId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid user id for rewards processing");
+        }
+        return parsedUserId;
     }
 
     private String normalizeNullable(String value) {

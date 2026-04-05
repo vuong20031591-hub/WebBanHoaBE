@@ -18,8 +18,8 @@ public class PaymentSyncScheduler {
     }
 
     @Scheduled(
-            initialDelayString = "#{${payments.polling-interval-seconds:15} * 1000}",
-            fixedDelayString = "#{${payments.polling-interval-seconds:15} * 1000}"
+            initialDelayString = "#{${payments.polling-initial-delay-seconds:2} * 1000}",
+            fixedDelayString = "#{${payments.polling-interval-seconds:5} * 1000}"
     )
     public void syncPendingPayments() {
         int confirmedCount = paymentService.syncPendingPayments();

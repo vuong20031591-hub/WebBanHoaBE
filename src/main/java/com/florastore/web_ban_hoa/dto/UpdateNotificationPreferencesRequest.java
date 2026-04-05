@@ -4,7 +4,9 @@ public record UpdateNotificationPreferencesRequest(
         Boolean emailOrderUpdates,
         Boolean emailPromotions,
         Boolean emailNewsletter,
+        Boolean emailEventReminders,
         Boolean smsOrderUpdates,
+        Boolean smsEventReminders,
         Boolean pushArtistUpdates
 ) {
 }
