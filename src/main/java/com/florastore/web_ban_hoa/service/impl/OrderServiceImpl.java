@@ -13,6 +13,7 @@ import com.florastore.web_ban_hoa.service.OrderService;
 import com.florastore.web_ban_hoa.service.RewardsService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -342,7 +343,22 @@ public class OrderServiceImpl implements OrderService {
             String search,
             Pageable pageable
     ) {
-        return orderRepository.findByFilters(status, startDate, endDate, search, pageable);
+        Specification<Order> spec = (root, query, cb) -> cb.conjunction();
+
+        if (status != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        if (startDate != null) {
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+        }
+        if (endDate != null) {
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), endDate));
+        }
+        if (search != null && !search.isBlank()) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("userId"), search));
+        }
+
+        return orderRepository.findAll(spec, pageable);
     }
 
     private List<Order> hydrateOrdersWithItems(List<Order> orders) {

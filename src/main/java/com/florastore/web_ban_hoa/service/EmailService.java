@@ -7,6 +7,9 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDate;
 
 @Service
 public class EmailService {
@@ -23,6 +26,9 @@ public class EmailService {
 
     @Value("${spring.mail.host:}")
     private String mailHost;
+
+    @Value("${app.inquiry.recipient-email:}")
+    private String inquiryRecipientEmail;
 
     public EmailService(JavaMailSender mailSender) {
         this.mailSender = mailSender;
@@ -116,6 +122,44 @@ public class EmailService {
                         fromName
         );
     }
+
+        public void sendEventInquiryNotification(
+            String fullName,
+            String senderEmail,
+            String eventType,
+            LocalDate eventDate,
+            String vision
+        ) {
+        if (!isMailConfigured()) {
+            throw new ResponseStatusException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "Email service is not configured"
+            );
+        }
+
+        String recipient = StringUtils.hasText(inquiryRecipientEmail)
+            ? inquiryRecipientEmail.trim()
+            : fromEmail;
+
+        if (!StringUtils.hasText(recipient)) {
+            throw new ResponseStatusException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "Inquiry recipient email is not configured"
+            );
+        }
+
+        String subject = String.format("[Event Inquiry] %s - %s", eventType, fullName);
+        String body = "New event inquiry received from website.\n\n"
+            + "Full name: " + fullName + "\n"
+            + "Email: " + senderEmail + "\n"
+            + "Event type: " + eventType + "\n"
+            + "Event date: " + eventDate + "\n\n"
+            + "Vision:\n"
+            + vision
+            + "\n";
+
+        sendPlainTextEmail(recipient, subject, body);
+        }
 
     private void sendPreferenceEmailBestEffort(String toEmail, String subject, String body) {
         if (!isMailConfigured()) {
