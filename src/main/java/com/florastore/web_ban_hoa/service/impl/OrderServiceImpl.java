@@ -2,6 +2,7 @@ package com.florastore.web_ban_hoa.service.impl;
 
 import com.florastore.web_ban_hoa.dto.*;
 import com.florastore.web_ban_hoa.entity.*;
+import com.florastore.web_ban_hoa.mapper.OrderResponseMapper;
 import com.florastore.web_ban_hoa.repository.CartRepository;
 import com.florastore.web_ban_hoa.repository.OrderItemRepository;
 import com.florastore.web_ban_hoa.repository.OrderRepository;
@@ -25,7 +26,6 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
-@Transactional
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
@@ -34,6 +34,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemRepository orderItemRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final OrderResponseMapper orderResponseMapper;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -41,16 +42,19 @@ public class OrderServiceImpl implements OrderService {
             CartService cartService,
             OrderItemRepository orderItemRepository,
             ProductRepository productRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            OrderResponseMapper orderResponseMapper) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
         this.cartService = cartService;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.orderResponseMapper = orderResponseMapper;
     }
 
     @Override
+    @Transactional
     public OrderResponse createAdminOrder(AdminCreateOrderRequest request) {
         User user = userRepository.findByEmail(request.customerEmail().trim())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
@@ -90,10 +94,11 @@ public class OrderServiceImpl implements OrderService {
 
         savedOrder.setTotalAmount(totalAmount);
         Order finalOrder = orderRepository.save(savedOrder);
-        return OrderResponse.fromEntity(finalOrder);
+        return orderResponseMapper.toResponse(finalOrder);
     }
 
     @Override
+    @Transactional
     public OrderResponse createOrder(String userId, CreateOrderRequest request) {
         Cart cart = loadCartOrThrow(userId);
         if (cart.getItems().isEmpty()) {
@@ -121,10 +126,11 @@ public class OrderServiceImpl implements OrderService {
         Order order = new Order(userId, totalAmount, request.paymentMethod());
         Order savedOrder = orderRepository.save(order);
         cartService.clearCart(userId);
-        return OrderResponse.fromEntity(savedOrder);
+        return orderResponseMapper.toResponse(savedOrder);
     }
 
     @Override
+    @Transactional
     public OrderResponse createOrderFromCart(String userId, CreateOrderFromCartRequest request) {
         Cart cart = loadCartOrThrow(userId);
         if (cart.getItems().isEmpty()) {
@@ -169,14 +175,14 @@ public class OrderServiceImpl implements OrderService {
 
         cartService.clearCart(userId);
 
-        return OrderResponse.fromEntity(savedOrder);
+        return orderResponseMapper.toResponse(savedOrder);
     }
 
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrder(String userId, Long orderId) {
         Order order = getOwnedOrderOrThrow(userId, orderId);
-        return OrderResponse.fromEntity(order);
+        return orderResponseMapper.toResponse(order);
     }
 
     @Override
@@ -184,10 +190,11 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse getLatestOrder(String userId) {
         Order order = orderRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        return OrderResponse.fromEntity(order);
+        return orderResponseMapper.toResponse(order);
     }
 
     @Override
+    @Transactional
     public OrderResponse confirmCodOrder(String userId, Long orderId) {
         Order order = getOwnedOrderOrThrow(userId, orderId);
         if (order.getPaymentMethod() != PaymentMethod.COD) {
@@ -201,16 +208,14 @@ public class OrderServiceImpl implements OrderService {
         order.setConfirmedAt(LocalDateTime.now());
         Order savedOrder = orderRepository.save(order);
 
-        return OrderResponse.fromEntity(savedOrder);
+        return orderResponseMapper.toResponse(savedOrder);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<OrderResponse> getUserOrders(String userId) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .map(OrderResponse::fromEntity)
-                .toList();
+                .stream().map(orderResponseMapper::toResponse).toList();
     }
 
     @Override
@@ -222,46 +227,15 @@ public class OrderServiceImpl implements OrderService {
             String search,
             Pageable pageable,
             boolean includeUserProfile) {
-
-        Page<Order> orderPage;
-        boolean hasDateFilter = startDate != null || endDate != null;
-
-        if (hasDateFilter) {
-            LocalDateTime effectiveStart = startDate != null
-                    ? startDate
-                    : LocalDateTime.of(1970, 1, 1, 0, 0);
-            LocalDateTime effectiveEnd = endDate != null
-                    ? endDate
-                    : LocalDateTime.of(3000, 1, 1, 0, 0);
-
-            if (status != null) {
-                orderPage = orderRepository.findByStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
-                        status,
-                        effectiveStart,
-                        effectiveEnd,
-                        pageable
-                );
-            } else {
-                orderPage = orderRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(
-                        effectiveStart,
-                        effectiveEnd,
-                        pageable
-                );
-            }
-        } else if (status != null) {
-            orderPage = orderRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
-        } else {
-            orderPage = orderRepository.findAll(pageable);
-        }
-
-        // Fix N+1 query: fetch all items in one query
-        List<Order> orders = orderPage.getContent();
-        if (!orders.isEmpty()) {
-            List<Long> orderIds = orders.stream().map(Order::getId).toList();
-            orderRepository.findAllWithItemsByIdIn(orderIds);
-        }
-
-        List<OrderResponse> responses = toOrderResponses(orderPage.getContent(), includeUserProfile);
+        Page<Order> orderPage = findOrdersWithFilters(
+                status,
+                startDate,
+                endDate,
+                normalizeNullable(search),
+                pageable
+        );
+        List<Order> orders = hydrateOrdersWithItems(orderPage.getContent());
+        List<OrderResponse> responses = toOrderResponses(orders, includeUserProfile);
         return new PagedResponse<>(
                 responses,
                 orderPage.getTotalElements(),
@@ -272,6 +246,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus newStatus) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
@@ -298,7 +273,7 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        return OrderResponse.fromEntity(savedOrder);
+        return orderResponseMapper.toResponse(savedOrder);
     }
 
     @Override
@@ -323,52 +298,60 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
     }
 
+    private Page<Order> findOrdersWithFilters(
+            OrderStatus status,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            String search,
+            Pageable pageable
+    ) {
+        return orderRepository.findByFilters(status, startDate, endDate, search, pageable);
+    }
+
+    private List<Order> hydrateOrdersWithItems(List<Order> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> orderIds = orders.stream().map(Order::getId).toList();
+        Map<Long, Order> ordersByIdWithItems = new HashMap<>();
+        for (Order orderWithItems : orderRepository.findAllWithItemsByIdIn(orderIds)) {
+            ordersByIdWithItems.put(orderWithItems.getId(), orderWithItems);
+        }
+
+        return orders.stream()
+                .map(order -> ordersByIdWithItems.getOrDefault(order.getId(), order))
+                .toList();
+    }
+
     private List<OrderResponse> toOrderResponses(List<Order> orders, boolean includeUserProfile) {
         if (orders.isEmpty()) {
             return List.of();
         }
 
         if (!includeUserProfile) {
-            return orders.stream()
-                    .map(OrderResponse::fromEntity)
-                    .toList();
+            return orderResponseMapper.toResponses(orders);
         }
 
         Map<String, User> usersByOrderUserId = loadUsersByOrderUserId(orders);
-        return orders.stream()
-                .map(order -> toOrderResponse(order, usersByOrderUserId))
-                .toList();
-    }
-
-    private OrderResponse toOrderResponse(Order order, Map<String, User> usersByOrderUserId) {
-        User user = usersByOrderUserId.get(order.getUserId());
-        return OrderResponse.fromEntity(
-                order,
-                user != null ? user.getFullName() : null,
-                user != null ? user.getEmail() : null
-        );
+        return orderResponseMapper.toResponses(orders, usersByOrderUserId);
     }
 
     private Map<String, User> loadUsersByOrderUserId(List<Order> orders) {
-        Set<Long> numericUserIds = new HashSet<>();
-
+        Map<String, Long> parsedUserIdsByOrderUserId = new HashMap<>();
         for (Order order : orders) {
-            String orderUserId = order.getUserId();
-            if (orderUserId == null || orderUserId.isBlank()) {
-                continue;
-            }
-
-            try {
-                numericUserIds.add(Long.parseLong(orderUserId));
-            } catch (NumberFormatException ignored) {
-                // Some legacy records may contain non-numeric userId values.
+            String orderUserId = normalizeNullable(order.getUserId());
+            Long parsedUserId = parseNumericUserId(orderUserId);
+            if (orderUserId != null && parsedUserId != null) {
+                parsedUserIdsByOrderUserId.putIfAbsent(orderUserId, parsedUserId);
             }
         }
 
-        if (numericUserIds.isEmpty()) {
+        if (parsedUserIdsByOrderUserId.isEmpty()) {
             return Map.of();
         }
 
+        Set<Long> numericUserIds = new HashSet<>(parsedUserIdsByOrderUserId.values());
         List<User> users = userRepository.findAllById(numericUserIds);
         Map<Long, User> usersById = new HashMap<>();
         for (User user : users) {
@@ -376,23 +359,34 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Map<String, User> usersByOrderUserId = new HashMap<>();
-        for (Order order : orders) {
-            String orderUserId = order.getUserId();
-            if (orderUserId == null || orderUserId.isBlank()) {
-                continue;
-            }
-
-            try {
-                Long parsed = Long.parseLong(orderUserId);
-                User user = usersById.get(parsed);
-                if (user != null) {
-                    usersByOrderUserId.put(orderUserId, user);
-                }
-            } catch (NumberFormatException ignored) {
-                // Skip non-numeric ids; response will fall back to null name/email.
+        for (Map.Entry<String, Long> entry : parsedUserIdsByOrderUserId.entrySet()) {
+            User user = usersById.get(entry.getValue());
+            if (user != null) {
+                usersByOrderUserId.put(entry.getKey(), user);
             }
         }
 
         return usersByOrderUserId;
+    }
+
+    private Long parseNumericUserId(String rawUserId) {
+        if (rawUserId == null) {
+            return null;
+        }
+
+        try {
+            return Long.parseLong(rawUserId);
+        } catch (NumberFormatException ignored) {
+            // Some legacy records may contain non-numeric userId values.
+            return null;
+        }
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

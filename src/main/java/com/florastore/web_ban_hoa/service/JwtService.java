@@ -67,6 +67,14 @@ public class JwtService {
         return subject;
     }
 
+    public String extractRole(Claims claims) {
+        Object role = claims.get("role");
+        if (role == null || role.toString().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "JWT role is missing");
+        }
+        return role.toString();
+    }
+
     public long getExpirationMs() {
         return expirationMs;
     }

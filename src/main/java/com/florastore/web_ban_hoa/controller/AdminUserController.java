@@ -1,12 +1,18 @@
 package com.florastore.web_ban_hoa.controller;
 
 import com.florastore.web_ban_hoa.dto.AdminUpdateUserRoleRequest;
+import com.florastore.web_ban_hoa.dto.PagedResponse;
 import com.florastore.web_ban_hoa.dto.UserResponse;
 import com.florastore.web_ban_hoa.entity.Role;
-import com.florastore.web_ban_hoa.security.AdminRoleGuard;
+import com.florastore.web_ban_hoa.security.AdminJwtGuard;
 import com.florastore.web_ban_hoa.service.AdminUserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,36 +22,41 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/admin/users")
+@Validated
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
-    private final AdminRoleGuard adminRoleGuard;
+    private final AdminJwtGuard adminJwtGuard;
 
-    public AdminUserController(AdminUserService adminUserService, AdminRoleGuard adminRoleGuard) {
+    public AdminUserController(
+            AdminUserService adminUserService,
+            AdminJwtGuard adminJwtGuard
+    ) {
         this.adminUserService = adminUserService;
-        this.adminRoleGuard = adminRoleGuard;
+        this.adminJwtGuard = adminJwtGuard;
     }
 
     @GetMapping
-    public ResponseEntity<List<UserResponse>> getUsers(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader,
-            @RequestParam(required = false) Role role
+    public ResponseEntity<PagedResponse<UserResponse>> getUsers(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(required = false) Role role,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
-        return ResponseEntity.ok(adminUserService.getUsers(role));
+        adminJwtGuard.assertAdminAndGetUserId(authorization);
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "fullName"));
+        return ResponseEntity.ok(adminUserService.getUsers(role, pageable));
     }
 
     @PatchMapping("/{id}/role")
     public ResponseEntity<UserResponse> updateUserRole(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable Long id,
             @Valid @RequestBody AdminUpdateUserRoleRequest request
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
-        return ResponseEntity.ok(adminUserService.updateUserRole(id, request.role()));
+        long actorUserId = adminJwtGuard.assertAdminAndGetUserId(authorization);
+        return ResponseEntity.ok(adminUserService.updateUserRole(actorUserId, id, request.role()));
     }
 }

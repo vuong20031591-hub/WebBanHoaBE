@@ -4,7 +4,7 @@ import com.florastore.web_ban_hoa.dto.AdminCollaboratorResponse;
 import com.florastore.web_ban_hoa.dto.AdminInviteCollaboratorRequest;
 import com.florastore.web_ban_hoa.dto.AdminUpdateCollaboratorRequest;
 import com.florastore.web_ban_hoa.dto.UserResponse;
-import com.florastore.web_ban_hoa.security.AdminRoleGuard;
+import com.florastore.web_ban_hoa.security.AdminJwtGuard;
 import com.florastore.web_ban_hoa.service.AdminCollaboratorService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -26,58 +26,64 @@ import java.util.List;
 public class AdminCollaboratorController {
 
     private final AdminCollaboratorService adminCollaboratorService;
-    private final AdminRoleGuard adminRoleGuard;
+    private final AdminJwtGuard adminJwtGuard;
 
     public AdminCollaboratorController(
             AdminCollaboratorService adminCollaboratorService,
-            AdminRoleGuard adminRoleGuard
+            AdminJwtGuard adminJwtGuard
     ) {
         this.adminCollaboratorService = adminCollaboratorService;
-        this.adminRoleGuard = adminRoleGuard;
+        this.adminJwtGuard = adminJwtGuard;
     }
 
     @GetMapping
     public ResponseEntity<List<AdminCollaboratorResponse>> getCollaborators(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader
+            @RequestHeader(name = "Authorization", required = false) String authorization
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
+        authorizeAdmin(authorization);
         return ResponseEntity.ok(adminCollaboratorService.getCollaborators());
     }
 
     @GetMapping("/candidates")
     public ResponseEntity<List<UserResponse>> getInviteCandidates(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader
+            @RequestHeader(name = "Authorization", required = false) String authorization
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
+        authorizeAdmin(authorization);
         return ResponseEntity.ok(adminCollaboratorService.getInviteCandidates());
     }
 
     @PostMapping
     public ResponseEntity<AdminCollaboratorResponse> inviteCollaborator(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @Valid @RequestBody AdminInviteCollaboratorRequest request
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
-        return ResponseEntity.ok(adminCollaboratorService.inviteCollaborator(request));
+        long actorUserId = authorizeAdmin(authorization);
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                adminCollaboratorService.inviteCollaborator(actorUserId, request)
+        );
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<AdminCollaboratorResponse> updateCollaborator(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable Long id,
             @Valid @RequestBody AdminUpdateCollaboratorRequest request
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
-        return ResponseEntity.ok(adminCollaboratorService.updateCollaborator(id, request));
+        long actorUserId = authorizeAdmin(authorization);
+        return ResponseEntity.ok(adminCollaboratorService.updateCollaborator(actorUserId, id, request));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> removeCollaborator(
-            @RequestHeader(name = "X-Role", required = false) String roleHeader,
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable Long id
     ) {
-        adminRoleGuard.assertAdmin(roleHeader);
-        adminCollaboratorService.removeCollaborator(id);
+        long actorUserId = authorizeAdmin(authorization);
+        adminCollaboratorService.removeCollaborator(actorUserId, id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    private long authorizeAdmin(String authorization) {
+        return adminJwtGuard.assertAdminAndGetUserId(authorization);
     }
 }

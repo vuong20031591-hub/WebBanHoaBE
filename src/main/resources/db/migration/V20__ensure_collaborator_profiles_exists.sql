@@ -4,17 +4,38 @@ CREATE TABLE IF NOT EXISTS collaborator_profiles (
     badge VARCHAR(20) NOT NULL DEFAULT 'STAFF',
     position_title VARCHAR(120) NOT NULL DEFAULT 'Shop Collaborator',
     position_description VARCHAR(255),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_collaborator_profiles_badge CHECK (badge IN ('STAFF', 'ADMIN'))
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE collaborator_profiles
-    ADD COLUMN IF NOT EXISTS badge VARCHAR(20),
-    ADD COLUMN IF NOT EXISTS position_title VARCHAR(120),
-    ADD COLUMN IF NOT EXISTS position_description VARCHAR(255),
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP,
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'collaborator_profiles'
+          AND column_name = 'created_at'
+          AND data_type = 'timestamp without time zone'
+    ) THEN
+        ALTER TABLE collaborator_profiles
+            ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE
+            USING created_at AT TIME ZONE 'UTC';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'collaborator_profiles'
+          AND column_name = 'updated_at'
+          AND data_type = 'timestamp without time zone'
+    ) THEN
+        ALTER TABLE collaborator_profiles
+            ALTER COLUMN updated_at TYPE TIMESTAMP WITH TIME ZONE
+            USING updated_at AT TIME ZONE 'UTC';
+    END IF;
+END $$;
 
 UPDATE collaborator_profiles
 SET
@@ -24,6 +45,10 @@ SET
     updated_at = COALESCE(updated_at, NOW());
 
 ALTER TABLE collaborator_profiles
+    ALTER COLUMN badge SET DEFAULT 'STAFF',
+    ALTER COLUMN position_title SET DEFAULT 'Shop Collaborator',
+    ALTER COLUMN created_at SET DEFAULT NOW(),
+    ALTER COLUMN updated_at SET DEFAULT NOW(),
     ALTER COLUMN badge SET NOT NULL,
     ALTER COLUMN position_title SET NOT NULL,
     ALTER COLUMN created_at SET NOT NULL,
@@ -35,6 +60,7 @@ BEGIN
         SELECT 1
         FROM pg_constraint
         WHERE conname = 'chk_collaborator_profiles_badge'
+          AND conrelid = 'collaborator_profiles'::regclass
     ) THEN
         ALTER TABLE collaborator_profiles
             ADD CONSTRAINT chk_collaborator_profiles_badge
@@ -42,5 +68,21 @@ BEGIN
     END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_collaborator_profiles_user_id
-    ON collaborator_profiles(user_id);
+DROP INDEX IF EXISTS idx_collaborator_profiles_user_id;
+
+CREATE OR REPLACE FUNCTION set_collaborator_profiles_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_collaborator_profiles_updated_at ON collaborator_profiles;
+
+CREATE TRIGGER trg_collaborator_profiles_updated_at
+BEFORE UPDATE ON collaborator_profiles
+FOR EACH ROW
+EXECUTE FUNCTION set_collaborator_profiles_updated_at();
