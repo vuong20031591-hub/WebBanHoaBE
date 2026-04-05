@@ -22,20 +22,7 @@ public class NewsletterService {
 
     @Transactional
     public void subscribe(String email, String source) {
-        var existing = repository.findByEmail(email);
-        
-        if (existing.isPresent()) {
-            NewsletterSubscriber subscriber = existing.get();
-            if (!subscriber.getIsActive()) {
-                subscriber.setIsActive(true);
-                subscriber.setUnsubscribedAt(null);
-            }
-            subscriber.setSource(source);
-            repository.save(subscriber);
-        } else {
-            NewsletterSubscriber subscriber = new NewsletterSubscriber(email, source);
-            repository.save(subscriber);
-        }
+        activateSubscription(email, source);
         
         try {
             emailService.sendZaloGroupInvitation(email);
@@ -51,6 +38,38 @@ public class NewsletterService {
         
         subscriber.setIsActive(false);
         subscriber.setUnsubscribedAt(LocalDateTime.now());
+        repository.save(subscriber);
+    }
+
+    @Transactional
+    public void syncSubscriptionPreference(String email, boolean subscribe, String source) {
+        if (subscribe) {
+            activateSubscription(email, source);
+            return;
+        }
+
+        repository.findByEmail(email).ifPresent(subscriber -> {
+            subscriber.setIsActive(false);
+            subscriber.setUnsubscribedAt(LocalDateTime.now());
+            repository.save(subscriber);
+        });
+    }
+
+    private void activateSubscription(String email, String source) {
+        var existing = repository.findByEmail(email);
+
+        if (existing.isPresent()) {
+            NewsletterSubscriber subscriber = existing.get();
+            if (!subscriber.getIsActive()) {
+                subscriber.setIsActive(true);
+                subscriber.setUnsubscribedAt(null);
+            }
+            subscriber.setSource(source);
+            repository.save(subscriber);
+            return;
+        }
+
+        NewsletterSubscriber subscriber = new NewsletterSubscriber(email, source);
         repository.save(subscriber);
     }
 }

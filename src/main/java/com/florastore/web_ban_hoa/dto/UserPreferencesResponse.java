@@ -8,8 +8,7 @@ public record UserPreferencesResponse(
         String theme,
         String timezone,
         Boolean signatureWrap,
-        Boolean ecoDelivery,
-        String ribbonColor
+    Boolean ecoDelivery
 ) {
     public static UserPreferencesResponse from(UserPreferences prefs) {
         return new UserPreferencesResponse(
@@ -18,8 +17,7 @@ public record UserPreferencesResponse(
                 prefs.getTheme(),
                 prefs.getTimezone(),
                 prefs.getSignatureWrap(),
-                prefs.getEcoDelivery(),
-                prefs.getRibbonColor()
+        prefs.getEcoDelivery()
         );
     }
 }
