@@ -18,7 +18,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @Transactional
@@ -216,7 +220,8 @@ public class OrderServiceImpl implements OrderService {
             LocalDateTime startDate,
             LocalDateTime endDate,
             String search,
-            Pageable pageable) {
+            Pageable pageable,
+            boolean includeUserProfile) {
 
         Page<Order> orderPage;
         boolean hasDateFilter = startDate != null || endDate != null;
@@ -256,7 +261,14 @@ public class OrderServiceImpl implements OrderService {
             orderRepository.findAllWithItemsByIdIn(orderIds);
         }
 
-        return PagedResponse.from(orderPage.map(OrderResponse::fromEntity));
+        List<OrderResponse> responses = toOrderResponses(orderPage.getContent(), includeUserProfile);
+        return new PagedResponse<>(
+                responses,
+                orderPage.getTotalElements(),
+                orderPage.getTotalPages(),
+                orderPage.getNumber(),
+                orderPage.getSize()
+        );
     }
 
     @Override
@@ -309,5 +321,78 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findById(orderId)
                 .filter(order -> order.getUserId().equals(userId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    }
+
+    private List<OrderResponse> toOrderResponses(List<Order> orders, boolean includeUserProfile) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        if (!includeUserProfile) {
+            return orders.stream()
+                    .map(OrderResponse::fromEntity)
+                    .toList();
+        }
+
+        Map<String, User> usersByOrderUserId = loadUsersByOrderUserId(orders);
+        return orders.stream()
+                .map(order -> toOrderResponse(order, usersByOrderUserId))
+                .toList();
+    }
+
+    private OrderResponse toOrderResponse(Order order, Map<String, User> usersByOrderUserId) {
+        User user = usersByOrderUserId.get(order.getUserId());
+        return OrderResponse.fromEntity(
+                order,
+                user != null ? user.getFullName() : null,
+                user != null ? user.getEmail() : null
+        );
+    }
+
+    private Map<String, User> loadUsersByOrderUserId(List<Order> orders) {
+        Set<Long> numericUserIds = new HashSet<>();
+
+        for (Order order : orders) {
+            String orderUserId = order.getUserId();
+            if (orderUserId == null || orderUserId.isBlank()) {
+                continue;
+            }
+
+            try {
+                numericUserIds.add(Long.parseLong(orderUserId));
+            } catch (NumberFormatException ignored) {
+                // Some legacy records may contain non-numeric userId values.
+            }
+        }
+
+        if (numericUserIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<User> users = userRepository.findAllById(numericUserIds);
+        Map<Long, User> usersById = new HashMap<>();
+        for (User user : users) {
+            usersById.put(user.getId(), user);
+        }
+
+        Map<String, User> usersByOrderUserId = new HashMap<>();
+        for (Order order : orders) {
+            String orderUserId = order.getUserId();
+            if (orderUserId == null || orderUserId.isBlank()) {
+                continue;
+            }
+
+            try {
+                Long parsed = Long.parseLong(orderUserId);
+                User user = usersById.get(parsed);
+                if (user != null) {
+                    usersByOrderUserId.put(orderUserId, user);
+                }
+            } catch (NumberFormatException ignored) {
+                // Skip non-numeric ids; response will fall back to null name/email.
+            }
+        }
+
+        return usersByOrderUserId;
     }
 }
