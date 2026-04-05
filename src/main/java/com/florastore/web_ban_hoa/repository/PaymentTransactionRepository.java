@@ -25,4 +25,10 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             PaymentMethod paymentMethod,
             PaymentTransactionStatus status
     );
+
+    List<PaymentTransaction> findByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(
+            Long orderId,
+            PaymentMethod paymentMethod,
+            PaymentTransactionStatus status
+    );
 }

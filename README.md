@@ -16,15 +16,17 @@ Backend service for Web Ban Hoa using Spring Boot.
 
 ## Environment variables
 
-Use `.env.sample` as reference.
+Use `.env.example` as reference.
 
 Core:
 
 - `SPRING_PROFILES_ACTIVE`: `dev` or `prod`
-- `SUPABASE_DB_URL`: JDBC URL for Supabase PostgreSQL
-- `SUPABASE_DB_USER`: database username
-- `SUPABASE_DB_PASSWORD`: database password
+- `DB_URL`: JDBC URL for Supabase PostgreSQL
+- `DB_USERNAME`: database username
+- `DB_PASSWORD`: database password
 - `SERVER_PORT`: optional app port
+- `DB_MIN_IDLE`: optional, defaults to `0`
+- `DB_MAX_POOL_SIZE`: optional, defaults to `3`
 
 Media:
 
@@ -56,9 +58,9 @@ D:\websitebanhoa\WebBanHoaBE\mvnw.cmd -f D:\websitebanhoa\WebBanHoaBE\pom.xml sp
 
 ```powershell
 $env:SPRING_PROFILES_ACTIVE='prod'
-$env:SUPABASE_DB_URL='jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
-$env:SUPABASE_DB_USER='postgres.your_project_ref'
-$env:SUPABASE_DB_PASSWORD='your_real_db_password'
+$env:DB_URL='jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
+$env:DB_USERNAME='postgres.your_project_ref'
+$env:DB_PASSWORD='your_real_db_password'
 D:\websitebanhoa\WebBanHoaBE\mvnw.cmd -f D:\websitebanhoa\WebBanHoaBE\pom.xml spring-boot:run
 ```
 
@@ -70,3 +72,13 @@ D:\websitebanhoa\WebBanHoaBE\mvnw.cmd -f D:\websitebanhoa\WebBanHoaBE\pom.xml sp
 
 Admin endpoints in this phase use header `X-Role: ADMIN`.
 Cart and order/payment APIs use `Authorization: Bearer <JWT>` and read `sub` as `userId`.
+
+## Troubleshooting
+
+- If startup fails with `MaxClientsInSessionMode: max clients reached`, the
+  current Supabase URL is hitting the session pool limit before Flyway can
+  connect.
+- In that case, reduce pool usage with `DB_MIN_IDLE=0` and a small
+  `DB_MAX_POOL_SIZE`, then switch `DB_URL` away from the exhausted session
+  pooler endpoint to the transaction-pooling or direct connection string from
+  your Supabase dashboard.

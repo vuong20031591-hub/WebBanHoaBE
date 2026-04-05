@@ -1,6 +1,7 @@
 package com.florastore.web_ban_hoa.controller;
 
 import com.florastore.web_ban_hoa.dto.NotificationPreferencesResponse;
+import com.florastore.web_ban_hoa.dto.SmsTestResponse;
 import com.florastore.web_ban_hoa.dto.UpdateNotificationPreferencesRequest;
 import com.florastore.web_ban_hoa.security.JwtSubjectResolver;
 import com.florastore.web_ban_hoa.service.NotificationPreferencesService;
@@ -38,5 +39,13 @@ public class NotificationPreferencesController {
     ) {
         String userId = jwtSubjectResolver.resolveUserId(authorization);
         return ResponseEntity.ok(service.updatePreferences(userId, request));
+    }
+
+    @PostMapping("/test-sms")
+    public ResponseEntity<SmsTestResponse> sendTestSms(
+            @RequestHeader(name = "Authorization", required = false) String authorization
+    ) {
+        String userId = jwtSubjectResolver.resolveUserId(authorization);
+        return ResponseEntity.ok(service.sendTestSms(userId));
     }
 }

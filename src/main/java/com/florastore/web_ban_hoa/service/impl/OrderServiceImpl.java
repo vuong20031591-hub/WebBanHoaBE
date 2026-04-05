@@ -178,6 +178,13 @@ public class OrderServiceImpl implements OrderService {
             productRepository.save(product);
         }
 
+        if (payableAmount.signum() == 0) {
+            savedOrder.setStatus(OrderStatus.CONFIRMED);
+            savedOrder.setConfirmedAt(LocalDateTime.now());
+            savedOrder = orderRepository.save(savedOrder);
+            awardRewardsIfConfirmed(savedOrder);
+        }
+
         cartService.clearCart(userId);
 
         return OrderResponse.fromEntity(savedOrder);
@@ -203,6 +210,9 @@ public class OrderServiceImpl implements OrderService {
         Order order = getOwnedOrderOrThrow(userId, orderId);
         if (order.getPaymentMethod() != PaymentMethod.COD) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order payment method is not COD");
+        }
+        if (order.getStatus() == OrderStatus.CONFIRMED) {
+            return OrderResponse.fromEntity(order);
         }
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PENDING order can be confirmed");

@@ -10,6 +10,7 @@ import com.florastore.web_ban_hoa.dto.UserResponse;
 import com.florastore.web_ban_hoa.entity.Role;
 import com.florastore.web_ban_hoa.entity.User;
 import com.florastore.web_ban_hoa.repository.UserRepository;
+import com.florastore.web_ban_hoa.validation.AuthValidationRules;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,16 +32,17 @@ public class AuthService {
 
     @Transactional
     public UserResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
-        }
+        String normalizedEmail = normalizeEmail(request.email());
+        String normalizedPhone = normalizePhone(request.phone());
+
+        assertUniqueRegistrationCredentials(normalizedEmail, normalizedPhone);
 
         String hashedPassword = passwordEncoder.encode(request.password());
         User user = new User(
-                request.email(),
+                normalizedEmail,
                 hashedPassword,
                 request.fullName(),
-                request.phone(),
+                normalizedPhone,
                 Role.USER
         );
 
@@ -49,7 +51,7 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
+        User user = userRepository.findByEmail(normalizeEmail(request.email()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
@@ -64,19 +66,20 @@ public class AuthService {
 
     @Transactional
     public LoginResponse loginWithSupabaseProfile(SupabaseUserProfile profile) {
-        User user = userRepository.findByEmail(profile.email()).orElse(null);
+        String normalizedEmail = normalizeEmail(profile.email());
+        User user = userRepository.findByEmail(normalizedEmail).orElse(null);
         
         if (user == null) {
             try {
                 user = userRepository.save(new User(
-                        profile.email(),
+                        normalizedEmail,
                         passwordEncoder.encode("oauth-google-user"),
-                        normalizeFullName(profile.fullName(), profile.email()),
-                        normalizePhone(profile.phone()),
+                        normalizeFullName(profile.fullName(), normalizedEmail),
+                        AuthValidationRules.normalizePhoneOrDefault(profile.phone(), "0000000000"),
                         Role.USER
                 ));
             } catch (Exception ex) {
-                user = userRepository.findByEmail(profile.email())
+                user = userRepository.findByEmail(normalizedEmail)
                         .orElseThrow(() -> new ResponseStatusException(
                                 HttpStatus.INTERNAL_SERVER_ERROR,
                                 "Failed to create or retrieve user"
@@ -94,7 +97,7 @@ public class AuthService {
         // Only update phone if user doesn't have a phone yet (is default value)
         // Don't overwrite user's manually set phone number with Google profile data
         if (user.getPhone() == null || user.getPhone().equals("0000000000")) {
-            String nextPhone = normalizePhone(profile.phone());
+            String nextPhone = AuthValidationRules.normalizePhoneOrDefault(profile.phone(), "0000000000");
             if (nextPhone != null && !nextPhone.isBlank() && !nextPhone.equals(user.getPhone())) {
                 user.setPhone(nextPhone);
                 changed = true;
@@ -117,9 +120,14 @@ public class AuthService {
     @Transactional
     public UserResponse updateProfile(String userId, UpdateProfileRequest request) {
         User user = parseAndLoadUser(userId);
+        String normalizedPhone = normalizePhone(request.phone());
+
+        if (userRepository.existsByPhoneAndIdNot(normalizedPhone, user.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone number is already used by another account");
+        }
 
         user.setFullName(request.fullName().trim());
-        user.setPhone(normalizePhone(request.phone()));
+        user.setPhone(normalizedPhone);
 
         User savedUser = userRepository.save(user);
         return UserResponse.from(savedUser);
@@ -168,14 +176,29 @@ public class AuthService {
         return "Google User";
     }
 
+    private void assertUniqueRegistrationCredentials(String email, String phone) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email is already used by another account");
+        }
+
+        if (userRepository.existsByPhone(phone)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Phone number is already used by another account");
+        }
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+
+        return email.trim().toLowerCase();
+    }
+
     private String normalizePhone(String phone) {
-        if (phone == null || phone.isBlank()) {
-            return "0000000000";
+        try {
+            return AuthValidationRules.normalizePhone(phone);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
         }
-        String normalized = phone.trim();
-        if (normalized.length() > 20) {
-            return normalized.substring(0, 20);
-        }
-        return normalized;
     }
 }

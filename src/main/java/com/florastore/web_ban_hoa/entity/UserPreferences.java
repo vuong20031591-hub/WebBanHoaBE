@@ -39,6 +39,9 @@ public class UserPreferences {
     @Column(name = "eco_delivery", nullable = false)
     private Boolean ecoDelivery = false;
 
+    @Column(name = "sms_two_factor_enabled", nullable = false)
+    private Boolean smsTwoFactorEnabled = false;
+
     @Column(name = "ribbon_color", nullable = false, length = 20)
     private String ribbonColor = "blush";
 

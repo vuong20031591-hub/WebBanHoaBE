@@ -8,7 +8,8 @@ public record UserPreferencesResponse(
         String theme,
         String timezone,
         Boolean signatureWrap,
-    Boolean ecoDelivery
+        Boolean ecoDelivery,
+        Boolean smsTwoFactorEnabled
 ) {
     public static UserPreferencesResponse from(UserPreferences prefs) {
         return new UserPreferencesResponse(
@@ -17,7 +18,8 @@ public record UserPreferencesResponse(
                 prefs.getTheme(),
                 prefs.getTimezone(),
                 prefs.getSignatureWrap(),
-        prefs.getEcoDelivery()
+                prefs.getEcoDelivery(),
+                prefs.getSmsTwoFactorEnabled()
         );
     }
 }

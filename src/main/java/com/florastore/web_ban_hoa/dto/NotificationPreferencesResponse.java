@@ -6,7 +6,9 @@ public record NotificationPreferencesResponse(
         Boolean emailOrderUpdates,
         Boolean emailPromotions,
         Boolean emailNewsletter,
+    Boolean emailEventReminders,
         Boolean smsOrderUpdates,
+    Boolean smsEventReminders,
         Boolean pushArtistUpdates
 ) {
     public static NotificationPreferencesResponse from(NotificationPreferences prefs) {
@@ -14,7 +16,9 @@ public record NotificationPreferencesResponse(
                 prefs.getEmailOrderUpdates(),
                 prefs.getEmailPromotions(),
                 prefs.getEmailNewsletter(),
+        prefs.getEmailEventReminders(),
                 prefs.getSmsOrderUpdates(),
+        prefs.getSmsEventReminders(),
                 prefs.getPushArtistUpdates()
         );
     }

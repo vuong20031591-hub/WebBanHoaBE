@@ -6,6 +6,7 @@ import com.florastore.web_ban_hoa.dto.RegisterRequest;
 import com.florastore.web_ban_hoa.dto.SupabaseUserProfile;
 import com.florastore.web_ban_hoa.dto.ChangePasswordRequest;
 import com.florastore.web_ban_hoa.dto.ForgotPasswordRequest;
+import com.florastore.web_ban_hoa.dto.ForgotPasswordResponse;
 import com.florastore.web_ban_hoa.dto.ResetPasswordWithCodeRequest;
 import com.florastore.web_ban_hoa.dto.UpdateProfileRequest;
 import com.florastore.web_ban_hoa.dto.UserResponse;
@@ -53,9 +54,9 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password/request")
-    public ResponseEntity<Void> requestForgotPasswordCode(@Valid @RequestBody ForgotPasswordRequest request) {
-        passwordResetService.requestResetCode(request.email());
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<ForgotPasswordResponse> requestForgotPasswordCode(@Valid @RequestBody ForgotPasswordRequest request) {
+        ForgotPasswordResponse response = passwordResetService.requestResetCode(request.email());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/forgot-password/confirm")

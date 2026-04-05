@@ -1,19 +1,25 @@
 package com.florastore.web_ban_hoa.service;
 
+import com.florastore.web_ban_hoa.dto.ForgotPasswordResponse;
 import com.florastore.web_ban_hoa.entity.PasswordResetToken;
 import com.florastore.web_ban_hoa.entity.User;
 import com.florastore.web_ban_hoa.repository.PasswordResetTokenRepository;
 import com.florastore.web_ban_hoa.repository.UserRepository;
+import com.florastore.web_ban_hoa.validation.AuthValidationRules;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -24,6 +30,10 @@ import java.util.Locale;
 public class PasswordResetService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Logger logger = LoggerFactory.getLogger(PasswordResetService.class);
+    private static final String PASSWORD_RESET_SENT_MESSAGE =
+            "If the email exists, a verification code has been prepared.";
+    private static final String EMAIL_NOT_FOUND_MESSAGE = "Email này không tồn tại.";
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
@@ -45,17 +55,17 @@ public class PasswordResetService {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.mailSender = mailSender;
         this.passwordEncoder = new BCryptPasswordEncoder();
-        this.mailFrom = mailFrom;
-        this.mailFromName = mailFromName;
+        this.mailFrom = normalizeValue(mailFrom);
+        this.mailFromName = normalizeValue(mailFromName);
         this.codeExpiryMinutes = codeExpiryMinutes;
     }
 
     @Transactional
-    public void requestResetCode(String email) {
+    public ForgotPasswordResponse requestResetCode(String email) {
         String normalizedEmail = normalizeEmail(email);
         User user = userRepository.findByEmail(normalizedEmail).orElse(null);
         if (user == null) {
-            return;
+            return new ForgotPasswordResponse("none", EMAIL_NOT_FOUND_MESSAGE, null);
         }
 
         invalidateActiveTokens(normalizedEmail, LocalDateTime.now());
@@ -69,13 +79,26 @@ public class PasswordResetService {
         );
         passwordResetTokenRepository.save(token);
 
-        sendResetCodeEmail(normalizedEmail, code);
+        try {
+            sendResetCodeEmail(normalizedEmail, code);
+            return new ForgotPasswordResponse("email", PASSWORD_RESET_SENT_MESSAGE, null);
+        } catch (ResponseStatusException ex) {
+            logger.warn("Password reset email delivery failed for {}. Reason: {}",
+                    normalizedEmail, ex.getReason());
+            throw ex;
+        }
     }
 
     @Transactional
     public void resetPasswordWithCode(String email, String code, String newPassword) {
         String normalizedEmail = normalizeEmail(email);
         LocalDateTime now = LocalDateTime.now();
+
+        try {
+            AuthValidationRules.validatePassword(newPassword);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        }
 
         PasswordResetToken token = passwordResetTokenRepository
                 .findFirstByEmailAndUsedFalseOrderByCreatedAtDesc(normalizedEmail)
@@ -115,22 +138,19 @@ public class PasswordResetService {
 
     private void sendResetCodeEmail(String email, String code) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
-
-            if (mailFrom != null && !mailFrom.isBlank()) {
-                if (mailFromName != null && !mailFromName.isBlank()) {
-                    helper.setFrom(mailFrom, mailFromName);
-                } else {
-                    helper.setFrom(mailFrom);
-                }
-            }
-
-            helper.setTo(email);
-            helper.setSubject("Floral Boutique password reset code");
-            helper.setText(buildHtmlBody(code), true);
-
-            mailSender.send(message);
+            sendResetCodeEmail(mailSender, email, code);
+        } catch (MailAuthenticationException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Gmail rejected SMTP login. Recreate the Gmail App Password for MAIL_USERNAME and paste it into MAIL_PASSWORD without spaces.",
+                    ex
+            );
+        } catch (MailSendException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Unable to send password reset email. Check Gmail SMTP host, port, and TLS settings.",
+                    ex
+            );
         } catch (MessagingException ex) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
@@ -144,6 +164,29 @@ public class PasswordResetService {
                     ex
             );
         }
+    }
+
+    private void sendResetCodeEmail(JavaMailSender sender, String email, String code) throws Exception {
+        MimeMessage message = sender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+
+        if (!mailFrom.isBlank()) {
+            if (!mailFromName.isBlank()) {
+                helper.setFrom(mailFrom, mailFromName);
+            } else {
+                helper.setFrom(mailFrom);
+            }
+        }
+
+        helper.setTo(email);
+        helper.setSubject("Floral Boutique password reset code");
+        helper.setText(buildHtmlBody(code), true);
+
+        sender.send(message);
+    }
+
+    private static String normalizeValue(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String buildHtmlBody(String code) {
