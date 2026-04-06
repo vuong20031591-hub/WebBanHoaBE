@@ -1,0 +1,12 @@
+target/
+.m2/
+build/
+.git/
+.idea/
+.vscode/
+*.md
+HELP.md
+.env
+.env.*
+src/test/
+.DS_Store
