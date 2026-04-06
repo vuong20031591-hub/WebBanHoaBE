@@ -21,6 +21,11 @@ public class DisabledMediaStorageService implements MediaStorageService {
     }
 
     @Override
+    public UploadMediaResponse uploadFromUrl(String imageUrl) {
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MESSAGE);
+    }
+
+    @Override
     public void delete(String key) {
         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MESSAGE);
     }
