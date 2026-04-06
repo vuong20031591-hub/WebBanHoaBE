@@ -7,6 +7,8 @@ import org.springframework.web.multipart.MultipartFile;
 public interface MediaStorageService {
     UploadMediaResponse upload(MultipartFile file);
 
+    UploadMediaResponse uploadFromUrl(String imageUrl);
+
     void delete(String key);
 
     SignedUrlResponse signedUrl(String key, long expiresInSeconds);

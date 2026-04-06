@@ -1,14 +1,17 @@
 package com.florastore.web_ban_hoa.controller;
 
 import com.florastore.web_ban_hoa.dto.SignedUrlResponse;
+import com.florastore.web_ban_hoa.dto.UploadMediaFromUrlRequest;
 import com.florastore.web_ban_hoa.dto.UploadMediaResponse;
 import com.florastore.web_ban_hoa.security.AdminRoleGuard;
 import com.florastore.web_ban_hoa.service.MediaStorageService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,6 +37,15 @@ public class AdminUploadController {
     ) {
         adminRoleGuard.assertAdmin(role);
         return ResponseEntity.ok(mediaStorageService.upload(file));
+    }
+
+    @PostMapping("/from-url")
+    public ResponseEntity<UploadMediaResponse> uploadFromUrl(
+            @RequestHeader(name = "X-Role", required = false) String role,
+            @Valid @RequestBody UploadMediaFromUrlRequest request
+    ) {
+        adminRoleGuard.assertAdmin(role);
+        return ResponseEntity.ok(mediaStorageService.uploadFromUrl(request.imageUrl()));
     }
 
     @DeleteMapping("/{key:.+}")
