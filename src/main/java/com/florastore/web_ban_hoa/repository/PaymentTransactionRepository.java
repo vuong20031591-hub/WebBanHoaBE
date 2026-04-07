@@ -16,6 +16,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             PaymentTransactionStatus status
     );
 
+    Optional<PaymentTransaction> findFirstByProviderTransactionIdOrderByCreatedAtDesc(String providerTransactionId);
+
     List<PaymentTransaction> findByOrderId(Long orderId);
 
     List<PaymentTransaction> findByOrderIdOrderByCreatedAtDesc(Long orderId);
@@ -24,6 +26,11 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
             Long orderId,
             PaymentMethod paymentMethod,
             PaymentTransactionStatus status
+    );
+
+    Optional<PaymentTransaction> findFirstByOrderIdAndPaymentMethodOrderByCreatedAtDesc(
+            Long orderId,
+            PaymentMethod paymentMethod
     );
 
     List<PaymentTransaction> findByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(
