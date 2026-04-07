@@ -14,6 +14,7 @@ import com.florastore.web_ban_hoa.entity.PaymentTransactionStatus;
 import com.florastore.web_ban_hoa.repository.OrderRepository;
 import com.florastore.web_ban_hoa.repository.PaymentTransactionRepository;
 import com.florastore.web_ban_hoa.service.PaymentService;
+import com.florastore.web_ban_hoa.service.PaymentStatusNotifier;
 import com.florastore.web_ban_hoa.service.RewardsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +57,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final RewardsService rewardsService;
+    private final PaymentStatusNotifier paymentStatusNotifier;
     private final RestClient restClient;
 
     private final String vietqrApiBaseUrl;
@@ -83,6 +85,7 @@ public class PaymentServiceImpl implements PaymentService {
             OrderRepository orderRepository,
             PaymentTransactionRepository paymentTransactionRepository,
             RewardsService rewardsService,
+            PaymentStatusNotifier paymentStatusNotifier,
             @Value("${payments.vietqr.api-base-url:https://api.vietqr.io}") String vietqrApiBaseUrl,
             @Value("${payments.vietqr.client-id:}") String vietqrClientId,
             @Value("${payments.vietqr.api-key:}") String vietqrApiKey,
@@ -104,6 +107,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.orderRepository = orderRepository;
         this.paymentTransactionRepository = paymentTransactionRepository;
         this.rewardsService = rewardsService;
+        this.paymentStatusNotifier = paymentStatusNotifier;
         this.restClient = RestClient.builder().build();
         this.vietqrApiBaseUrl = trimTrailingSlash(vietqrApiBaseUrl);
         this.vietqrClientId = vietqrClientId;
@@ -183,27 +187,23 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment code not found in SePay webhook");
         }
 
-        PaymentTransaction pendingTransaction = paymentTransactionRepository
+        PaymentTransaction matchedTransaction = paymentTransactionRepository
                 .findFirstByProviderTransactionIdAndStatusOrderByCreatedAtDesc(paymentCode, PaymentTransactionStatus.PENDING)
+                .or(() -> paymentTransactionRepository.findFirstByProviderTransactionIdOrderByCreatedAtDesc(paymentCode))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pending payment transaction not found"));
 
-        Order order = pendingTransaction.getOrder();
+        Order order = matchedTransaction.getOrder();
         if (order.getStatus() != OrderStatus.PENDING) {
             return new PaymentWebhookResult("IGNORED", "Order already processed", order.getId(), String.valueOf(request.id()));
         }
-        if (pendingTransaction.getPaymentMethod() == PaymentMethod.COD) {
+        if (matchedTransaction.getPaymentMethod() == PaymentMethod.COD) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COD order cannot be confirmed by SePay webhook");
-        }
-        if (isExpired(pendingTransaction)) {
-            pendingTransaction.setStatus(PaymentTransactionStatus.FAILED);
-            paymentTransactionRepository.save(pendingTransaction);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "QR code expired");
         }
         if (!isInboundAmountMatch(order.getTotalAmount(), request.transferAmount())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook amount does not match order amount");
         }
 
-        return markPaymentAsSuccess(order, pendingTransaction, request.transferAmount(), String.valueOf(request.id()), "Webhook processed");
+        return markPaymentAsSuccess(order, matchedTransaction, request.transferAmount(), String.valueOf(request.id()), "Webhook processed");
     }
 
     @Override
@@ -221,6 +221,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
             order = orderRepository.save(order);
             awardRewardsForConfirmedOrder(order);
+            paymentStatusNotifier.publishPaid(order.getId());
         }
 
         List<String> txSummary = transactions.stream()
@@ -340,7 +341,7 @@ public class PaymentServiceImpl implements PaymentService {
                 return null;
             }
 
-            String checkoutUrl = firstNonBlank(response.data().qrDataURL(), response.data().qrLink(), vietqrApiBaseUrl);
+            String checkoutUrl = firstNonBlank(response.data().qrLink(), response.data().qrDataURL(), vietqrApiBaseUrl);
             String note = buildCheckoutNote(provider, transferCode);
             return new GeneratedQr(checkoutUrl, response.data().qrCode(), note);
         } catch (Exception ex) {
@@ -363,35 +364,34 @@ public class PaymentServiceImpl implements PaymentService {
                     order.setConfirmedAt(LocalDateTime.now());
                 }
                 orderRepository.save(order);
+                paymentStatusNotifier.publishPaid(order.getId());
             }
             return;
         }
 
-        List<PaymentTransaction> pendingTransactions = paymentTransactionRepository
-                .findByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(
-                        order.getId(),
-                        order.getPaymentMethod(),
-                        PaymentTransactionStatus.PENDING
-                );
+        List<PaymentTransaction> candidateTransactions = paymentTransactionRepository
+                .findByOrderIdOrderByCreatedAtDesc(order.getId())
+                .stream()
+                .filter(tx -> tx.getPaymentMethod() == order.getPaymentMethod())
+                .filter(tx -> tx.getStatus() != PaymentTransactionStatus.SUCCESS)
+                .toList();
 
-        if (pendingTransactions.isEmpty()) {
+        if (candidateTransactions.isEmpty()) {
             return;
         }
 
-        for (PaymentTransaction pendingTransaction : pendingTransactions) {
-            if (isExpired(pendingTransaction)) {
-                pendingTransaction.setStatus(PaymentTransactionStatus.FAILED);
-                paymentTransactionRepository.save(pendingTransaction);
-                continue;
+        for (PaymentTransaction candidateTransaction : candidateTransactions) {
+            if (candidateTransaction.getStatus() == PaymentTransactionStatus.PENDING && isExpired(candidateTransaction)) {
+                candidateTransaction.setStatus(PaymentTransactionStatus.FAILED);
+                paymentTransactionRepository.save(candidateTransaction);
             }
 
-            SePayTransaction matched = findMatchingSePayTransaction(order, pendingTransaction);
+            SePayTransaction matched = findMatchingSePayTransaction(order, candidateTransaction);
             if (matched == null) {
                 continue;
             }
 
-            markPaymentAsSuccess(order, pendingTransaction, matched.amount(), matched.referenceId(), "Payment reconciled");
-            failOtherPendingTransactions(order.getId(), order.getPaymentMethod(), pendingTransaction.getId());
+            markPaymentAsSuccess(order, candidateTransaction, matched.amount(), matched.referenceId(), "Payment reconciled");
             return;
         }
     }
@@ -542,40 +542,20 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Webhook amount does not match order amount");
         }
 
-        PaymentTransaction pendingTransaction = paymentTransactionRepository
+        PaymentTransaction candidateTransaction = paymentTransactionRepository
                 .findFirstByOrderIdAndPaymentMethodAndStatusOrderByCreatedAtDesc(order.getId(), method, PaymentTransactionStatus.PENDING)
+                .or(() -> paymentTransactionRepository.findFirstByOrderIdAndPaymentMethodOrderByCreatedAtDesc(order.getId(), method))
                 .orElse(null);
 
-        if (pendingTransaction == null) {
+        if (candidateTransaction == null || candidateTransaction.getStatus() == PaymentTransactionStatus.SUCCESS) {
             return new PaymentWebhookResult("IGNORED", "Transaction already processed", order.getId(), request.providerTransactionId());
         }
 
-        if (isExpired(pendingTransaction)) {
-            pendingTransaction.setStatus(PaymentTransactionStatus.FAILED);
-            paymentTransactionRepository.save(pendingTransaction);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "QR code expired");
-        }
-
-        if (!containsIgnoreCase(request.transactionContent(), pendingTransaction.getProviderTransactionId().toLowerCase(Locale.ROOT))) {
+        if (!containsIgnoreCase(request.transactionContent(), candidateTransaction.getProviderTransactionId().toLowerCase(Locale.ROOT))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment content does not match payment code");
         }
 
-        pendingTransaction.setStatus(PaymentTransactionStatus.SUCCESS);
-        pendingTransaction.setAmount(request.amount());
-        try {
-            paymentTransactionRepository.saveAndFlush(pendingTransaction);
-        } catch (DataIntegrityViolationException ex) {
-            return new PaymentWebhookResult("IGNORED", "Transaction already processed", order.getId(), request.providerTransactionId());
-        }
-
-        if (order.getStatus() == OrderStatus.PENDING) {
-            order.setStatus(OrderStatus.CONFIRMED);
-            order.setConfirmedAt(LocalDateTime.now());
-            order = orderRepository.save(order);
-            awardRewardsForConfirmedOrder(order);
-        }
-
-        return new PaymentWebhookResult("OK", "Webhook processed", order.getId(), request.providerTransactionId());
+        return markPaymentAsSuccess(order, candidateTransaction, request.amount(), request.providerTransactionId(), "Webhook processed");
     }
 
     private PaymentWebhookResult markPaymentAsSuccess(
@@ -593,11 +573,14 @@ public class PaymentServiceImpl implements PaymentService {
             return new PaymentWebhookResult("IGNORED", "Transaction already processed", order.getId(), providerReference);
         }
 
+        failOtherPendingTransactions(order.getId(), pendingTransaction.getPaymentMethod(), pendingTransaction.getId());
+
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setConfirmedAt(LocalDateTime.now());
             order = orderRepository.save(order);
             awardRewardsForConfirmedOrder(order);
+            paymentStatusNotifier.publishPaid(order.getId());
         }
 
         return new PaymentWebhookResult("OK", successMessage, order.getId(), providerReference);
