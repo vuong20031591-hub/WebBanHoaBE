@@ -134,6 +134,14 @@ public class AuthService {
     }
 
     @Transactional
+    public UserResponse updateAvatar(String userId, String avatarUrl) {
+        User user = parseAndLoadUser(userId);
+        user.setAvatarUrl(normalizeAvatarUrl(avatarUrl));
+        User savedUser = userRepository.save(user);
+        return UserResponse.from(savedUser);
+    }
+
+    @Transactional
     public void changePassword(String userId, ChangePasswordRequest request) {
         User user = parseAndLoadUser(userId);
 
@@ -200,5 +208,13 @@ public class AuthService {
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
         }
+    }
+
+    private String normalizeAvatarUrl(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Avatar URL is required");
+        }
+
+        return avatarUrl.trim();
     }
 }

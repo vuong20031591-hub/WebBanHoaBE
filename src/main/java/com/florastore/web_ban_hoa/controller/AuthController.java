@@ -9,15 +9,18 @@ import com.florastore.web_ban_hoa.dto.ForgotPasswordRequest;
 import com.florastore.web_ban_hoa.dto.ForgotPasswordResponse;
 import com.florastore.web_ban_hoa.dto.ResetPasswordWithCodeRequest;
 import com.florastore.web_ban_hoa.dto.UpdateProfileRequest;
+import com.florastore.web_ban_hoa.dto.UploadMediaResponse;
 import com.florastore.web_ban_hoa.dto.UserResponse;
 import com.florastore.web_ban_hoa.security.JwtSubjectResolver;
 import com.florastore.web_ban_hoa.service.AuthService;
+import com.florastore.web_ban_hoa.service.MediaStorageService;
 import com.florastore.web_ban_hoa.service.PasswordResetService;
 import com.florastore.web_ban_hoa.service.SupabaseAuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
@@ -28,17 +31,20 @@ public class AuthController {
     private final JwtSubjectResolver jwtSubjectResolver;
     private final SupabaseAuthService supabaseAuthService;
     private final PasswordResetService passwordResetService;
+    private final MediaStorageService mediaStorageService;
 
     public AuthController(
             AuthService authService,
             JwtSubjectResolver jwtSubjectResolver,
             SupabaseAuthService supabaseAuthService,
-            PasswordResetService passwordResetService
+            PasswordResetService passwordResetService,
+            MediaStorageService mediaStorageService
     ) {
         this.authService = authService;
         this.jwtSubjectResolver = jwtSubjectResolver;
         this.supabaseAuthService = supabaseAuthService;
         this.passwordResetService = passwordResetService;
+        this.mediaStorageService = mediaStorageService;
     }
 
     @PostMapping("/register")
@@ -101,6 +107,17 @@ public class AuthController {
     ) {
         String userId = jwtSubjectResolver.resolveUserId(authorization);
         UserResponse user = authService.updateProfile(userId, request);
+        return ResponseEntity.ok(user);
+    }
+
+    @PostMapping("/me/avatar")
+    public ResponseEntity<UserResponse> uploadAvatar(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam("file") MultipartFile file
+    ) {
+        String userId = jwtSubjectResolver.resolveUserId(authorization);
+        UploadMediaResponse uploadResult = mediaStorageService.upload(file);
+        UserResponse user = authService.updateAvatar(userId, uploadResult.publicUrl());
         return ResponseEntity.ok(user);
     }
 

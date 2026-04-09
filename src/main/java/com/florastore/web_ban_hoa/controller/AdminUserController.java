@@ -1,6 +1,8 @@
 package com.florastore.web_ban_hoa.controller;
 
+import com.florastore.web_ban_hoa.dto.AdminCreateUserRequest;
 import com.florastore.web_ban_hoa.dto.AdminUpdateUserRoleRequest;
+import com.florastore.web_ban_hoa.dto.AdminUpdateUserRequest;
 import com.florastore.web_ban_hoa.dto.PagedResponse;
 import com.florastore.web_ban_hoa.dto.UserResponse;
 import com.florastore.web_ban_hoa.entity.Role;
@@ -13,9 +15,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -48,6 +53,44 @@ public class AdminUserController {
         adminJwtGuard.assertAdminAndGetUserId(authorization);
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "fullName"));
         return ResponseEntity.ok(adminUserService.getUsers(role, pageable));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserResponse> getUserById(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable Long id
+    ) {
+        adminJwtGuard.assertAdminAndGetUserId(authorization);
+        return ResponseEntity.ok(adminUserService.getUserById(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<UserResponse> createUser(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody AdminCreateUserRequest request
+    ) {
+        long actorUserId = adminJwtGuard.assertAdminAndGetUserId(authorization);
+        return ResponseEntity.ok(adminUserService.createUser(actorUserId, request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<UserResponse> updateUser(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable Long id,
+            @Valid @RequestBody AdminUpdateUserRequest request
+    ) {
+        long actorUserId = adminJwtGuard.assertAdminAndGetUserId(authorization);
+        return ResponseEntity.ok(adminUserService.updateUser(actorUserId, id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable Long id
+    ) {
+        long actorUserId = adminJwtGuard.assertAdminAndGetUserId(authorization);
+        adminUserService.deleteUser(actorUserId, id);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/role")

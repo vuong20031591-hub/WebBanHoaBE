@@ -7,7 +7,8 @@ public record UserResponse(
         String email,
         String fullName,
         String phone,
-        String role
+    String role,
+    String avatarUrl
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(
@@ -15,7 +16,8 @@ public record UserResponse(
                 user.getEmail(),
                 user.getFullName(),
                 user.getPhone(),
-                user.getRole().name()
+        user.getRole().name(),
+        user.getAvatarUrl()
         );
     }
 }

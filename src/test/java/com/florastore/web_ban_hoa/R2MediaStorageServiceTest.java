@@ -28,6 +28,7 @@ class R2MediaStorageServiceTest {
         R2Properties properties = new R2Properties();
         properties.setBucket("flowers");
         properties.setAccountId("acct");
+        properties.setAccessKey("12345678901234567890123456789012");
 
         MediaImageProperties imageProperties = new MediaImageProperties();
 
