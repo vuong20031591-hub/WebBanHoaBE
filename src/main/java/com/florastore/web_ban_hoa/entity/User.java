@@ -28,6 +28,9 @@ public class User {
     @Column(nullable = false, length = 20)
     private String phone;
 
+    @Column(name = "avatar_url", length = 1024)
+    private String avatarUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Role role;

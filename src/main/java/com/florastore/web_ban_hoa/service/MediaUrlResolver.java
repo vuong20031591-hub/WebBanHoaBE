@@ -1,15 +1,20 @@
 package com.florastore.web_ban_hoa.service;
 
 import com.florastore.web_ban_hoa.config.R2Properties;
+import com.florastore.web_ban_hoa.config.MediaLocalProperties;
 import org.springframework.stereotype.Component;
+
+import java.util.Locale;
 
 @Component
 public class MediaUrlResolver {
 
     private final R2Properties r2Properties;
+    private final MediaLocalProperties mediaLocalProperties;
 
-    public MediaUrlResolver(R2Properties r2Properties) {
+    public MediaUrlResolver(R2Properties r2Properties, MediaLocalProperties mediaLocalProperties) {
         this.r2Properties = r2Properties;
+        this.mediaLocalProperties = mediaLocalProperties;
     }
 
     public String resolveProductImage(String image) {
@@ -18,7 +23,11 @@ public class MediaUrlResolver {
         }
 
         String normalized = image.trim();
-        if (normalized.startsWith("http://") || normalized.startsWith("https://") || normalized.startsWith("/")) {
+        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+            return normalizeLegacyLoopbackMediaUrl(normalized);
+        }
+
+        if (normalized.startsWith("/")) {
             return normalized;
         }
 
@@ -34,6 +43,33 @@ public class MediaUrlResolver {
         }
 
         return normalized;
+    }
+
+    private String normalizeLegacyLoopbackMediaUrl(String absoluteUrl) {
+        String mediaBaseUrl = safeTrim(mediaLocalProperties.getPublicBaseUrl());
+        if (mediaBaseUrl.isEmpty()) {
+            return absoluteUrl;
+        }
+
+        try {
+            java.net.URI uri = java.net.URI.create(absoluteUrl);
+            String host = safeTrim(uri.getHost()).toLowerCase(Locale.ROOT);
+            String path = safeTrim(uri.getPath());
+
+            if (!("localhost".equals(host) || "127.0.0.1".equals(host) || "0.0.0.0".equals(host))) {
+                return absoluteUrl;
+            }
+
+            final String mediaPrefix = "/media/";
+            if (!path.startsWith(mediaPrefix)) {
+                return absoluteUrl;
+            }
+
+            String relativePath = path.substring(mediaPrefix.length());
+            return trimTrailingSlash(mediaBaseUrl) + "/" + relativePath;
+        } catch (IllegalArgumentException ex) {
+            return absoluteUrl;
+        }
     }
 
     private String safeTrim(String value) {
