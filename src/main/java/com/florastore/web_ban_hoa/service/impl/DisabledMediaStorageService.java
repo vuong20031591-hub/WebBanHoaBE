@@ -75,6 +75,11 @@ public class DisabledMediaStorageService implements MediaStorageService {
     }
 
     @Override
+    public UploadMediaResponse uploadFromUrl(String imageUrl) {
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, MESSAGE);
+    }
+
+    @Override
     public void delete(String key) {
         if (!localMediaStorageSupport.supports(key)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported media key while R2 is disabled");
