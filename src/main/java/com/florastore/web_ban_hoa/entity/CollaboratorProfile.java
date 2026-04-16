@@ -10,17 +10,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "collaborator_profiles")
-@Getter
-@Setter
-@NoArgsConstructor
 public class CollaboratorProfile {
 
     @Id
@@ -46,6 +40,9 @@ public class CollaboratorProfile {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    public CollaboratorProfile() {
+    }
+
     @PrePersist
     public void prePersist() {
         LocalDateTime now = LocalDateTime.now();
@@ -60,5 +57,61 @@ public class CollaboratorProfile {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public CollaboratorBadge getBadge() {
+        return badge;
+    }
+
+    public void setBadge(CollaboratorBadge badge) {
+        this.badge = badge;
+    }
+
+    public String getPositionTitle() {
+        return positionTitle;
+    }
+
+    public void setPositionTitle(String positionTitle) {
+        this.positionTitle = positionTitle;
+    }
+
+    public String getPositionDescription() {
+        return positionDescription;
+    }
+
+    public void setPositionDescription(String positionDescription) {
+        this.positionDescription = positionDescription;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

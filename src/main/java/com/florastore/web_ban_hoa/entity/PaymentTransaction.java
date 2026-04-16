@@ -13,9 +13,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -24,9 +21,6 @@ import java.time.LocalDateTime;
 @Table(name = "payment_transactions", uniqueConstraints = {
         @UniqueConstraint(name = "uk_payment_provider_tx", columnNames = {"payment_method", "provider_transaction_id"})
 })
-@Getter
-@Setter
-@NoArgsConstructor
 public class PaymentTransaction {
 
     @Id
@@ -54,6 +48,9 @@ public class PaymentTransaction {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    public PaymentTransaction() {
+    }
+
     public PaymentTransaction(Order order, PaymentMethod paymentMethod, String providerTransactionId, BigDecimal amount, PaymentTransactionStatus status) {
         this.order = order;
         this.paymentMethod = paymentMethod;
@@ -67,5 +64,61 @@ public class PaymentTransaction {
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
         }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Order getOrder() {
+        return order;
+    }
+
+    public void setOrder(Order order) {
+        this.order = order;
+    }
+
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(PaymentMethod paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public String getProviderTransactionId() {
+        return providerTransactionId;
+    }
+
+    public void setProviderTransactionId(String providerTransactionId) {
+        this.providerTransactionId = providerTransactionId;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public PaymentTransactionStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(PaymentTransactionStatus status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }

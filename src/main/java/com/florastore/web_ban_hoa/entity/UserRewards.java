@@ -1,17 +1,11 @@
 package com.florastore.web_ban_hoa.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_rewards")
-@Getter
-@Setter
-@NoArgsConstructor
 public class UserRewards {
 
     @Id
@@ -36,6 +30,9 @@ public class UserRewards {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    public UserRewards() {
+    }
+
     public UserRewards(Long userId) {
         this.userId = userId;
     }
@@ -54,5 +51,61 @@ public class UserRewards {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public Integer getPoints() {
+        return points;
+    }
+
+    public void setPoints(Integer points) {
+        this.points = points;
+    }
+
+    public Integer getLifetimePoints() {
+        return lifetimePoints;
+    }
+
+    public void setLifetimePoints(Integer lifetimePoints) {
+        this.lifetimePoints = lifetimePoints;
+    }
+
+    public String getTier() {
+        return tier;
+    }
+
+    public void setTier(String tier) {
+        this.tier = tier;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

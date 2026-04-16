@@ -1,17 +1,11 @@
 package com.florastore.web_ban_hoa.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "newsletter_subscribers")
-@Getter
-@Setter
-@NoArgsConstructor
 public class NewsletterSubscriber {
 
     @Id
@@ -33,6 +27,9 @@ public class NewsletterSubscriber {
     @Column(length = 50)
     private String source = "bloom_club";
 
+    public NewsletterSubscriber() {
+    }
+
     public NewsletterSubscriber(String email, String source) {
         this.email = email;
         this.source = source;
@@ -44,5 +41,57 @@ public class NewsletterSubscriber {
         if (this.subscribedAt == null) {
             this.subscribedAt = LocalDateTime.now();
         }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public LocalDateTime getSubscribedAt() {
+        return subscribedAt;
+    }
+
+    public void setSubscribedAt(LocalDateTime subscribedAt) {
+        this.subscribedAt = subscribedAt;
+    }
+
+    public Boolean isActive() {
+        return isActive;
+    }
+
+    public Boolean getIsActive() {
+        return isActive;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        this.isActive = isActive;
+    }
+
+    public LocalDateTime getUnsubscribedAt() {
+        return unsubscribedAt;
+    }
+
+    public void setUnsubscribedAt(LocalDateTime unsubscribedAt) {
+        this.unsubscribedAt = unsubscribedAt;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 }

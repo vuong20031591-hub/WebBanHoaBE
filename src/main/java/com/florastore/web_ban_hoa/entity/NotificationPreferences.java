@@ -1,17 +1,11 @@
 package com.florastore.web_ban_hoa.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "notification_preferences")
-@Getter
-@Setter
-@NoArgsConstructor
 public class NotificationPreferences {
 
     @Id
@@ -48,6 +42,9 @@ public class NotificationPreferences {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    public NotificationPreferences() {
+    }
+
     public NotificationPreferences(Long userId) {
         this.userId = userId;
         this.emailOrderUpdates = true;
@@ -73,5 +70,93 @@ public class NotificationPreferences {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public Boolean getEmailOrderUpdates() {
+        return emailOrderUpdates;
+    }
+
+    public void setEmailOrderUpdates(Boolean emailOrderUpdates) {
+        this.emailOrderUpdates = emailOrderUpdates;
+    }
+
+    public Boolean getEmailPromotions() {
+        return emailPromotions;
+    }
+
+    public void setEmailPromotions(Boolean emailPromotions) {
+        this.emailPromotions = emailPromotions;
+    }
+
+    public Boolean getEmailNewsletter() {
+        return emailNewsletter;
+    }
+
+    public void setEmailNewsletter(Boolean emailNewsletter) {
+        this.emailNewsletter = emailNewsletter;
+    }
+
+    public Boolean getEmailEventReminders() {
+        return emailEventReminders;
+    }
+
+    public void setEmailEventReminders(Boolean emailEventReminders) {
+        this.emailEventReminders = emailEventReminders;
+    }
+
+    public Boolean getSmsOrderUpdates() {
+        return smsOrderUpdates;
+    }
+
+    public void setSmsOrderUpdates(Boolean smsOrderUpdates) {
+        this.smsOrderUpdates = smsOrderUpdates;
+    }
+
+    public Boolean getSmsEventReminders() {
+        return smsEventReminders;
+    }
+
+    public void setSmsEventReminders(Boolean smsEventReminders) {
+        this.smsEventReminders = smsEventReminders;
+    }
+
+    public Boolean getPushArtistUpdates() {
+        return pushArtistUpdates;
+    }
+
+    public void setPushArtistUpdates(Boolean pushArtistUpdates) {
+        this.pushArtistUpdates = pushArtistUpdates;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

@@ -1,17 +1,11 @@
 package com.florastore.web_ban_hoa.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_preferences")
-@Getter
-@Setter
-@NoArgsConstructor
 public class UserPreferences {
 
     @Id
@@ -51,6 +45,9 @@ public class UserPreferences {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    public UserPreferences() {
+    }
+
     public UserPreferences(Long userId) {
         this.userId = userId;
     }
@@ -69,5 +66,101 @@ public class UserPreferences {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public String getTheme() {
+        return theme;
+    }
+
+    public void setTheme(String theme) {
+        this.theme = theme;
+    }
+
+    public String getTimezone() {
+        return timezone;
+    }
+
+    public void setTimezone(String timezone) {
+        this.timezone = timezone;
+    }
+
+    public Boolean getSignatureWrap() {
+        return signatureWrap;
+    }
+
+    public void setSignatureWrap(Boolean signatureWrap) {
+        this.signatureWrap = signatureWrap;
+    }
+
+    public Boolean getEcoDelivery() {
+        return ecoDelivery;
+    }
+
+    public void setEcoDelivery(Boolean ecoDelivery) {
+        this.ecoDelivery = ecoDelivery;
+    }
+
+    public Boolean getSmsTwoFactorEnabled() {
+        return smsTwoFactorEnabled;
+    }
+
+    public void setSmsTwoFactorEnabled(Boolean smsTwoFactorEnabled) {
+        this.smsTwoFactorEnabled = smsTwoFactorEnabled;
+    }
+
+    public String getRibbonColor() {
+        return ribbonColor;
+    }
+
+    public void setRibbonColor(String ribbonColor) {
+        this.ribbonColor = ribbonColor;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }
